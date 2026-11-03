@@ -12,6 +12,19 @@
     window.scrollTo(0,0);
     document.title = page === 'learn' ? 'How it works · Signal Studio' : 'Signal Studio · Email detector';
   }
+  const themeButton = document.getElementById('theme-toggle');
+  function updateThemeButton() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    themeButton.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+    themeButton.innerHTML = dark ? '<span aria-hidden="true">☀</span> <b>Light mode</b>' : '<span aria-hidden="true">☾</span> <b>Dark mode</b>';
+  }
+  themeButton.addEventListener('click', () => {
+    const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('signal-theme', theme); } catch (_) { /* Theme still works for this session. */ }
+    updateThemeButton();
+  });
+  updateThemeButton();
   const toggle = document.getElementById('menu-toggle');
   toggle.addEventListener('click', () => {
     const collapsed = document.body.classList.toggle('nav-collapsed');

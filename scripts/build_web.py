@@ -10,7 +10,7 @@ files = {'engine.py':'engine.py', 'training.py':'training.py', 'local_ui.py':'lo
          'assets/PUBLIC_SUFFIX_LICENSE.md':'assets/PUBLIC_SUFFIX_LICENSE.md',
          'demo/model.json':'demo/model.json', 'demo/report.json':'demo/report.json',
          'demo/golden.json':'demo/golden.json', 'ui/app.js':'app.js', 'ui/style.css':'style.css',
-         'ui/review.js':'review.js', 'ui/routes.js':'routes.js', 'ui/learn.js':'learn.js', 'ui/guide.css':'guide.css', 'ui/favicon.svg':'favicon.svg', 'web/browser_backend.py':'browser_backend.py',
+         'ui/review.js':'review.js', 'ui/routes.js':'routes.js', 'ui/learn.js':'learn.js', 'ui/guide.css':'guide.css', 'ui/theme.css':'theme.css', 'ui/favicon.svg':'favicon.svg', 'web/browser_backend.py':'browser_backend.py',
          'web/worker.js':'worker.js', 'web/browser-api.js':'browser-api.js',
          'web/model-controls.js':'model-controls.js'}
 allowed = set(files.values()) | {'index.html'}
@@ -23,6 +23,7 @@ for source, target in files.items():
     shutil.copyfile(root / source, dest)
 html = (root / 'ui/index.html').read_text()
 html = html.replace('Your data stays on this machine.', 'Your files stay in this browser.')
+html = html.replace('The local app accepts up to 20 MiB for the entire training request, including both files and JSON encoding. The actual combined file size must be smaller. Training uses memory, so your computer can reach a practical limit sooner.', 'The browser trainer has no fixed file-size or row-count limit in the app. Both files and training data are processed in your browser memory, so the practical limit depends on your device and browser. Start small and increase gradually; large runs may be slow or run out of memory. Imported model files have a separate 10 MiB limit.')
 html = html.replace('Running locally', 'In your browser')
 html = html.replace('Training runs in the local server. Refreshing this page loses the progress view; stopping the server interrupts the run.', 'Training runs in this browser. Keep this page open until you download your model.')
 html = html.replace('Saved models', 'Models in this session')

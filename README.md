@@ -233,3 +233,52 @@ The browser edition performs a golden-case check of the demo model during startu
 python -m unittest -v test_browser_backend test_local_ui test_detector
 node --test test_review.js
 ```
+
+## Performance testing
+
+The browser trainer has no fixed training-file size or row-count limit in the application. It reads the data and trains in browser memory, so the practical limit depends on the browser, device, available memory, data, and training settings. A successful run does not establish a universal maximum.
+
+### Observed browser benchmark
+
+On November 3, 2026, a single session on an Apple M1 with 16 GB of memory trained on synthetic TXT files using the default settings. Each dataset contained equal numbers of flagged and ordinary addresses. The browser and peak memory usage were not recorded. These are approximate wall-clock observations, not repeatable performance guarantees:
+
+| Total addresses | Flagged / ordinary | Observed completion time |
+| ---: | ---: | --- |
+| 1,000 | 500 / 500 | Within 8 seconds, including first-use training software loading |
+| 10,000 | 5,000 / 5,000 | Within 4 seconds |
+| 50,000 | 25,000 / 25,000 | Within 16 seconds |
+| 100,000 | 50,000 / 50,000 | Within 34 seconds |
+| 250,000 | 125,000 / 125,000 | Between about 58 and 83 seconds |
+
+The later runs reused the warmed-up browser session. The 250,000-address input files totaled about 7.5 MiB. The exported model was about 3.7 MiB, contained the maximum 50,000 features, and was successfully imported again. The browser edition separately limits imported model files to 10 MiB. The local server instead limits the entire JSON request, including both training files, to 20 MiB.
+
+These synthetic addresses have deliberately simple label-specific patterns. Their evaluation results **do not measure real-world accuracy**. Test model quality separately using representative, independently labeled data. Performance may differ for addresses with different lengths or fragment diversity, other settings, and devices with less memory.
+
+### Repeat the test
+
+Generate two synthetic TXT files locally. Change `total` to try a different even number of addresses; the two files each contain half of that number:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import random
+import string
+
+total = 250_000
+output = Path('perf-data')
+output.mkdir(exist_ok=True)
+for label, seed in [('ordinary', 98317), ('flagged', 29741)]:
+    rng = random.Random(seed)
+    with (output / f'{label}-{total}.txt').open('w', encoding='utf-8') as file:
+        for i in range(total // 2):
+            letters = ''.join(rng.choices(string.ascii_lowercase, k=9))
+            prefix = 'person' if label == 'ordinary' else 'qzx'
+            file.write(f'{prefix}{letters}{i}@example.com\n')
+print(f'Created test files in {output}/')
+PY
+```
+
+1. Open the browser edition and select the matching files under **Train a model**.
+2. Start a timer, select **Train model**, and keep the page open until training completes or reports an error. Record the total time, device, browser, settings, and the size of both files.
+3. Under **Import & export**, download the model and try importing it again. Record the model size and whether re-import succeeds.
+4. Repeat each size and increase gradually. If the browser becomes unresponsive or memory is exhausted, record that result and stop; do not interpret a single success or failure as a universal limit. For accuracy, use a separate independent labeled dataset.
