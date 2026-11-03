@@ -1,62 +1,89 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const flows = {
-    training: {
-      overline: 'THE TRAINING JOURNEY', title: 'From examples to a model',
-      steps: [
-        {short:'Label', title:'Start with reviewed examples', icon:'01', text:'People place complete email addresses into flagged or ordinary lists. The model will learn to imitate those spelling labels.', example:'FLAGGED  ·  qzxv8801@gmail.com    /    ORDINARY  ·  mukunda@gmail.com'},
-        {short:'Prepare', title:'Prepare and check the data', icon:'02', text:'The detector extracts a username and a registrable domain label. It removes duplicate model inputs and stops if the labels conflict.', example:'MUKUNDA@mail.vendor.co.in  →  mukunda  +  vendor'},
-        {short:'Split', title:'Put examples into separate groups', icon:'03', text:'Related username groups stay together. Roughly three folds train, one selects a threshold, and one tests the finished model.', example:'TRAIN ≈ 60%    →    VALIDATE ≈ 20%    →    TEST ≈ 20%'},
-        {short:'Fragments', title:'Turn spelling into numbers', icon:'04', text:'The model counts 2-, 3-, and 4-character fragments in the username and domain. TF-IDF gives the known fragments numerical values.', example:'mukunda  →  mu · uk · ku · un · nd · da · muk · …'},
-        {short:'Learn', title:'Learn the weights', icon:'05', text:'Logistic regression fits weights that help distinguish the two labels. Minimum fragment frequency controls which fragments enter the vocabulary.', example:'KNOWN FRAGMENTS  +  LEARNED WEIGHTS  +  INTERCEPT'},
-        {short:'Measure', title:'Choose a cutoff and test', icon:'06', text:'Validation chooses a cutoff within the observed false-alert budget. The frozen model is then measured on the test split and saved.', example:'MODEL.JSON  +  REPORT.JSON  +  REFERENCE CASES'}
-      ]
+  const training = [
+    {
+      name:'Label', kicker:'THE INPUT · TWO LABELED FILES', title:'A person gives each example a label.',
+      body:`<p>Before the model exists, someone reviews examples and decides which spelling looks <b>flagged</b> and which looks <b>ordinary</b>. The examples and their labels are the training data.</p><div class="story-columns"><div class="story-list flagged"><span>FILE 1 · FLAGGED</span><strong>qzxv@gmail.com</strong><strong>zxqp@gmail.com</strong><strong>kqzx@gmail.com</strong><small>…and 2 more</small></div><div class="story-list ordinary"><span>FILE 2 · ORDINARY</span><strong>maya@gmail.com</strong><strong>maya+shop@gmail.com</strong><strong>arun@gmail.com</strong><small>…and 3 more</small></div></div><div class="story-note">This walkthrough uses <b>11 invented addresses</b>: 5 flagged and 6 ordinary. The labels are examples for learning, not evidence of fraud or mailbox validity.</div>`
     },
-    prediction: {
-      overline: 'THE DETECTION JOURNEY', title: 'From one address to a decision',
-      steps: [
-        {short:'Input', title:'Start with an address', icon:'01', text:'You select a saved model and provide an address. This detector looks at spelling; it does not contact the mailbox.', example:'mukunda@gmail.com'},
-        {short:'Prepare', title:'Extract the model inputs', icon:'02', text:'The feature copy is lowercased, and the username and registrable domain label are extracted. Unsupported forms return unsure.', example:'mukunda@gmail.com  →  mukunda  +  gmail'},
-        {short:'Fragments', title:'Find familiar fragments', icon:'03', text:'Overlapping fragments are generated for both components and matched against the model vocabulary.', example:'mukunda  →  mu · uk · ku · un · nd · da · …'},
-        {short:'Coverage', title:'Check for enough coverage', icon:'04', text:'Each component must meet the model’s coverage floor. If too few fragments are known, the detector returns unsure rather than guessing.', example:'DEMO EXAMPLE  ·  USER 5 / 15 = 33.3%    /    DOMAIN 9 / 9 = 100%'},
-        {short:'Score', title:'Combine the learned weights', icon:'05', text:'Known fragments are converted to normalized TF-IDF values. Their contributions and the intercept produce a margin and a score.', example:'INTERCEPT  +  USER CONTRIBUTIONS  +  DOMAIN CONTRIBUTIONS  →  SCORE'},
-        {short:'Decide', title:'Apply the threshold', icon:'06', text:'If the score reaches the cutoff, the decision is looks gibberish; otherwise it is looks ordinary. A missing cutoff yields score only.', example:'DEMO EXAMPLE  ·  0.4126 < 0.4508  →  LOOKS ORDINARY'}
-      ]
+    {
+      name:'Prepare', kicker:'STEP 2 · GET THE INPUTS READY', title:'Keep the pieces the model will use.',
+      body:`<p>The app makes a lowercase feature copy and finds two parts. It ignores subdomains and suffixes when learning spelling patterns.</p><div class="address-demo"><span>FULL ADDRESS</span><strong>MAYA+SHOP@mail.vendor.co.in</strong><div class="address-arrow">↓</div><div class="address-parts"><div><small>USERNAME</small><b>maya+shop</b></div><span>+</span><div><small>DOMAIN LABEL</small><b>vendor</b></div></div></div><div class="story-note">If two addresses become the same model input, they count once. If the two lists assign different labels to that same input, training stops so a person can resolve it.</div>`
+    },
+    {
+      name:'Split', kicker:'STEP 3 · GIVE EACH EXAMPLE ONE JOB', title:'11 addresses, divided into 5 buckets.',
+      body:`<p>Imagine putting every related username group into one of <b>five buckets</b> (also called folds). No bucket shares an address with another. Three buckets teach the model, one helps choose the cutoff, and one checks the finished model.</p><div class="alias-callout"><span>🔗</span><div><b>Why keep two addresses together?</b><p><code>maya@gmail.com</code> and <code>maya+shop@gmail.com</code> share the stem <code>maya</code> before the plus sign. They stay in the same bucket so the model is not tested on a close alias of something it already learned.</p></div></div><p class="fold-instruction">Click a bucket to see which addresses go into it.</p><div class="fold-grid" id="fold-grid"><button class="fold-card active" data-fold="0"><span>BUCKET 1</span><strong>Test</strong><small>2 addresses</small></button><button class="fold-card" data-fold="1"><span>BUCKET 2</span><strong>Validation</strong><small>2 addresses</small></button><button class="fold-card train" data-fold="2"><span>BUCKET 3</span><strong>Training</strong><small>3 addresses</small></button><button class="fold-card train" data-fold="3"><span>BUCKET 4</span><strong>Training</strong><small>2 addresses</small></button><button class="fold-card train" data-fold="4"><span>BUCKET 5</span><strong>Training</strong><small>2 addresses</small></button></div><div id="fold-detail" class="fold-detail"></div><div class="split-total"><span><b>7</b> learn the weights</span><span><b>2</b> choose the cutoff</span><span><b>2</b> test the finished model</span></div><p class="story-foot">This small arrangement is illustrative. The app uses a deterministic grouped, class-stratified split; real bucket sizes and assignments can differ. The plus tag remains a scoring feature.</p>`
+    },
+    {
+      name:'Fragments', kicker:'STEP 4 · MAKE SMALL PIECES', title:'A fragment is just neighboring letters.',
+      body:`<p>This model looks at small pieces instead of treating the entire address as one word. The app slides a small window across each part of an address, making overlapping pieces of <b>2, 3 and 4 characters</b>. These are also called <b>n-grams</b>.</p><div class="fragment-board"><div class="fragment-word"><span>m</span><span>u</span><span>k</span><span>u</span><span>n</span><span>d</span><span>a</span></div><div><small>2 CHARACTERS</small><div class="fragment-row"><b>mu</b><b>uk</b><b>ku</b><b>un</b><b>nd</b><b>da</b></div></div><div><small>3 CHARACTERS</small><div class="fragment-row alt"><b>muk</b><b>uku</b><b>kun</b><b>und</b><b>nda</b></div></div><div><small>4 CHARACTERS</small><div class="fragment-row subtle"><b>muku</b><b>ukun</b><b>kund</b><b>unda</b></div></div></div><p>In our 7 training addresses, imagine the username piece <code>ma</code> appears in both <code>maya</code> and <code>maya+shop</code>. With minimum fragment frequency set to <b>2</b>, it is kept. A piece found in only one training address is left out.</p><div class="story-note">The kept pieces form the <b>vocabulary</b>. Username and domain pieces are tracked separately. Validation and test addresses do not decide which pieces enter the vocabulary.</div>`
+    },
+    {
+      name:'Learn', kicker:'STEP 5 · FIT THE MODEL', title:'How does the computer learn?',
+      body:`<p>At first the computer has starting numbers for the pieces. It looks at the training addresses, makes guesses, compares those guesses with the human labels, and adjusts the numbers to reduce errors. It repeats this across the training data.</p><div class="learning-loop"><div><span>1</span><b>Look</b><small>Read training pieces</small></div><div class="loop-arrow">→</div><div><span>2</span><b>Guess</b><small>Calculate a score</small></div><div class="loop-arrow">→</div><div><span>3</span><b>Compare</b><small>Check the human label</small></div><div class="loop-arrow">→</div><div><span>4</span><b>Adjust</b><small>Improve the weights</small></div></div><p>After fitting, each kept piece has a <b>weight</b>. A negative weight pushes a score toward ordinary; a positive weight pushes toward flagged. There is also a starting number called the <b>intercept</b>.</p><div class="toy-weights"><span>ILLUSTRATIVE NUMBERS, NOT THE DEMO MODEL</span><div><code>user:ma</code><b>−0.8</b><small>pushes toward ordinary</small></div><div><code>user:qz</code><b>+1.2</b><small>pushes toward flagged</small></div></div><p class="story-foot">The actual algorithm is logistic regression. It fits all weights together using the labeled examples and a penalty that discourages overly large weights. TF-IDF and normalization determine each piece’s input value.</p>`
+    },
+    {
+      name:'Check & save', kicker:'STEP 6 · VALIDATE, TEST, SAVE', title:'Choose a cutoff, then check it.',
+      body:`<p>The learned score still needs a <b>threshold</b>: the cutoff at or above which the model raises an alert. The model did not learn weights from the validation bucket.</p><div class="validation-example"><span>OUR 2 VALIDATION ADDRESSES · PRETEND SCORES</span><div><b>laila@gmail.com</b><small>Human label: ordinary</small><strong>0.62</strong></div><div><b>kqzx@gmail.com</b><small>Human label: flagged</small><strong>0.81</strong></div></div><p>Suppose these are their scores and the budget allows <b>no ordinary false alert</b>. A cutoff of <b>0.81</b> alerts on the flagged example while leaving the ordinary example unalerted. The app chooses the cutoff using validation scores, then checks that frozen choice on the two separate test addresses.</p><div class="file-cards"><div><b>model.json</b><p>The learned numbers, vocabulary, settings and cutoff. You load this file to score new addresses.</p></div><div><b>report.json</b><p>The counts, settings and measured results. Read it to understand how the run performed.</p></div><div><b>golden.json</b><p>Fixed reference addresses and expected results. This checks consistent scoring, not accuracy.</p></div></div><p class="story-foot">The cutoff example is invented; a real cutoff depends on all validation scores. If no cutoff catches a flagged validation example within the budget, the model returns score only.</p>`
     }
+  ];
+  const folds = [
+    {role:'TEST', text:'Set aside until the end to check the finished model.', items:[['ordinary','arun@gmail.com'],['flagged','zxqp@gmail.com']]},
+    {role:'VALIDATION', text:'Used after fitting to choose the alert cutoff.', items:[['ordinary','laila@gmail.com'],['flagged','kqzx@gmail.com']]},
+    {role:'TRAINING', text:'Related Maya addresses stay together in the same bucket.', items:[['ordinary','maya@gmail.com'],['ordinary','maya+shop@gmail.com'],['flagged','qzxv@gmail.com']]},
+    {role:'TRAINING', text:'These examples help fit the model’s vocabulary and weights.', items:[['ordinary','jia@gmail.com'],['flagged','vqzx@gmail.com']]},
+    {role:'TRAINING', text:'These examples also help fit the vocabulary and weights.', items:[['ordinary','noah@gmail.com'],['flagged','xzqv@gmail.com']]}
+  ];
+  const detection = [
+    {name:'Address', kicker:'DETECTION · STEP 1', title:'Give the model one new address.', body:`<p>You choose the demo model and ask it to analyze one address. The model only examines spelling; it does not contact the mailbox.</p><div class="single-address"><span>EMAIL TO ANALYZE</span><strong>mukunda@gmail.com</strong><small>Using the bundled demonstration model</small></div><div class="story-note">The demo was trained on invented data. A result does not establish whether the address is real, safe, or fraudulent.</div>`},
+    {name:'Pieces', kicker:'DETECTION · STEP 2', title:'Break the spelling into pieces.', body:`<p>The model extracts the username <b>mukunda</b> and the domain label <b>gmail</b>. Each is split into overlapping fragments of 2, 3, and 4 characters.</p><div class="fragment-board"><small>USERNAME · 15 FRAGMENT OCCURRENCES</small><div class="fragment-row"><b>mu</b><b>uk</b><b class="known">ku ✓</b><b class="known">un ✓</b><b class="known">nd ✓</b><b class="known">da ✓</b></div><div class="fragment-row alt"><b>muk</b><b>uku</b><b>kun</b><b class="known">und ✓</b><b>nda</b></div><div class="fragment-row subtle"><b>muku</b><b>ukun</b><b>kund</b><b>unda</b></div></div><p>The check marks are the <b>5 username pieces</b> found in the demo model’s vocabulary. The domain <code>gmail</code> produces 9 pieces, and all 9 are known.</p>`},
+    {name:'Coverage', kicker:'DETECTION · STEP 3', title:'Is there enough familiar information?', body:`<p>The app checks what fraction of pieces it recognizes in <b>each</b> part. This is <b>fragment coverage</b>, not the final score.</p><div class="coverage-bars"><div><span>USERNAME · 5 OF 15 KNOWN</span><b>33.3%</b><div><i style="width:33.3%"></i></div></div><div><span>DOMAIN · 9 OF 9 KNOWN</span><b>100%</b><div><i style="width:100%"></i></div></div></div><div class="story-note">The demo model’s minimum is <b>20%</b> for each part, so this address can be scored. At 9.5% username coverage, it would be <b>unsure</b> and have no score—even if its spelling looks random.</div><p class="story-foot">Each part must also have at least one known fragment, even if the configured minimum is zero.</p>`},
+    {name:'Score', kicker:'DETECTION · STEP 4', title:'The familiar pieces vote with weights.', body:`<p>The app turns the known piece counts into normalized <b>TF-IDF</b> values. Each value is multiplied by its learned weight. Positive contributions push toward flagged; negative contributions push toward ordinary.</p><div class="contribution-demo"><span>ONE REAL CONTRIBUTION IN THIS DEMO</span><div><code>user:un</code><b>0.3055</b><em>×</em><b>−0.4823</b><em>=</em><strong>−0.1474</strong></div><small>piece &nbsp; · &nbsp; input value &nbsp; · &nbsp; learned weight &nbsp; · &nbsp; contribution</small></div><p>Adding every contribution to the starting value gives a <b>margin</b>. The sigmoid formula converts that margin to a score between 0 and 1.</p><div class="math-ribbon"><span>+0.4199<br><small>starting value</small></span><b>−</b><span>0.4012<br><small>username total</small></span><b>−</b><span>0.3720<br><small>domain total</small></span><b>≈</b><span>−0.3533<br><small>margin</small></span><b>→</b><span>0.4126<br><small>score</small></span></div><p class="story-foot">Values are rounded for display. This is the demo model’s arithmetic for this address, not a general rule for the fragment <code>un</code>.</p>`},
+    {name:'Decision', kicker:'DETECTION · STEP 5', title:'Compare the score to the cutoff.', body:`<p>The demo’s saved threshold is approximately <b>0.4508</b>. Scores at or above it are flagged; lower scores are labeled ordinary.</p><div class="decision-meter"><div class="meter-labels"><span>0 · LOWER SCORE</span><span>1 · HIGHER SCORE</span></div><div class="meter-line"><i></i><span class="meter-score" style="left:41.26%">0.4126<small>this score</small></span><span class="meter-cutoff" style="left:45.08%">0.4508<small>cutoff</small></span></div></div><div class="decision-result"><span>THE COMPARISON</span><strong>0.4126 &lt; 0.4508 <b>→</b> looks ordinary</strong><p>The score is below the cutoff. This is a model decision, not a guarantee about the address.</p></div><p class="story-foot">A different threshold can change the decision without changing the score. If there is no saved cutoff, the app returns score only.</p>`}
+  ];
+  const series = {
+    training: {steps:training,index:0,playing:false,timer:null},
+    detection: {steps:detection,index:0,playing:false,timer:null}
   };
-  let mode = 'training', step = 0, playing = !matchMedia('(prefers-reduced-motion: reduce)').matches, timer;
-  function render() {
-    const flow = flows[mode], item = flow.steps[step];
-    $('flow-overline').textContent = flow.overline;
-    $('flow-title').textContent = flow.title;
-    $('flow-count').textContent = `${String(step+1).padStart(2,'0')} / ${String(flow.steps.length).padStart(2,'0')}`;
-    $('flow-rail').innerHTML = flow.steps.map((s,i) => `<button class="flow-node ${i===step?'current':''} ${i<step?'done':''}" data-step="${i}" aria-label="Step ${i+1}: ${s.short}" ${i===step?'aria-current="step"':''}><span>${String(i+1).padStart(2,'0')}</span><small>${s.short}</small></button>`).join('');
-    $('flow-icon').textContent = item.icon;
-    $('flow-stage-label').textContent = `STEP ${item.icon} / ${mode === 'training' ? 'TRAINING' : 'DETECTION'}`;
-    $('flow-stage-title').textContent = item.title;
-    $('flow-stage-text').textContent = item.text;
-    $('flow-example').textContent = item.example;
-    $('flow-toggle').innerHTML = playing ? 'Pause animation <span>Ⅱ</span>' : 'Play animation <span>▶</span>';
+  function renderFold(index) {
+    const item = folds[index], detail = $('fold-detail');
+    if (!detail) return;
+    document.querySelectorAll('[data-fold]').forEach(btn=>{const active=Number(btn.dataset.fold)===index;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));});
+    detail.innerHTML = `<div><span>BUCKET ${index+1} · ${item.role}</span><p>${item.text}</p></div><div>${item.items.map(([label,email])=>`<div class="fold-email"><span class="fold-label ${label}">${label}</span><code>${email}</code></div>`).join('')}</div>`;
   }
-  function restartTimer() {
-    clearInterval(timer);
-    if (playing) timer = setInterval(() => {
-      if (document.querySelector('[data-view="learn"]').hidden || document.hidden) return;
-      step = (step + 1) % flows[mode].steps.length; render();
-    }, 3500);
+  function renderJourney(key) {
+    const state=series[key], stage=state.steps[state.index];
+    $(key+'-track').classList.toggle('is-playing',state.playing);
+    $(key+'-count').textContent=`${String(state.index+1).padStart(2,'0')} / ${String(state.steps.length).padStart(2,'0')}`;
+    $(key+'-track').innerHTML=state.steps.map((s,i)=>`<button class="journey-node ${i===state.index?'current':''} ${i<state.index?'completed':''}" data-story-step="${i}" ${i===state.index?'aria-current="step"':''} aria-label="Step ${i+1}: ${s.name}"><i>${String(i+1).padStart(2,'0')}</i><span>${s.name}</span></button>`).join('');
+    $(key+'-stage').innerHTML=`<div class="story-stage-head"><div class="story-step-number">${String(state.index+1).padStart(2,'0')}</div><div><span class="story-kicker">${stage.kicker}</span><h4>${stage.title}</h4></div></div><div class="story-content">${stage.body}</div>`;
+    $(key+'-play').innerHTML=state.playing?'Pause walkthrough <span>Ⅱ</span>':'Play walkthrough <span>▶</span>';
+    if (key==='training' && state.index===2) renderFold(0);
   }
-  document.querySelectorAll('[data-flow]').forEach(button => button.addEventListener('click', () => {
-    mode = button.dataset.flow; step = 0;
-    document.querySelectorAll('[data-flow]').forEach(b => { const active = b === button; b.classList.toggle('selected',active); b.setAttribute('aria-pressed',String(active)); });
-    render(); restartTimer();
-  }));
-  $('flow-rail').addEventListener('click', event => {
-    const button = event.target.closest('[data-step]'); if (!button) return;
-    step = Number(button.dataset.step); playing = false; render(); restartTimer();
-  });
-  $('flow-prev').addEventListener('click', () => {step = (step + flows[mode].steps.length - 1) % flows[mode].steps.length; playing = false; render(); restartTimer();});
-  $('flow-next').addEventListener('click', () => {step = (step + 1) % flows[mode].steps.length; playing = false; render(); restartTimer();});
-  $('flow-toggle').addEventListener('click', () => {playing = !playing; render(); restartTimer();});
-  document.querySelectorAll('[data-scroll]').forEach(button=>button.addEventListener('click',()=>document.getElementById(button.dataset.scroll).scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'})));
-  render(); restartTimer();
+  function pause(key) {const state=series[key]; state.playing=false;clearInterval(state.timer);}
+  for (const key of Object.keys(series)) {
+    const state=series[key];
+    $(key+'-track').addEventListener('click',e=>{const button=e.target.closest('[data-story-step]');if(!button)return;pause(key);state.index=Number(button.dataset.storyStep);renderJourney(key);});
+    $(key+'-prev').onclick=()=>{pause(key);state.index=(state.index+state.steps.length-1)%state.steps.length;renderJourney(key);};
+    $(key+'-next').onclick=()=>{pause(key);state.index=(state.index+1)%state.steps.length;renderJourney(key);};
+    $(key+'-play').onclick=()=>{if(state.playing){pause(key);}else{if(state.index===state.steps.length-1)state.index=0;state.playing=true;state.timer=setInterval(()=>{if(document.querySelector('[data-view="learn"]').hidden||document.hidden)return;state.index=(state.index+1)%state.steps.length;renderJourney(key);if(state.index===state.steps.length-1){pause(key);renderJourney(key);}},16000);}renderJourney(key);};
+    $(key+'-stage').addEventListener('click',e=>{const button=e.target.closest('[data-fold]');if(button){pause(key);renderFold(Number(button.dataset.fold));renderJourneyPlay(key);}});
+    renderJourney(key);
+  }
+  function renderJourneyPlay(key){$(key+'-play').innerHTML=series[key].playing?'Pause walkthrough <span>Ⅱ</span>':'Play walkthrough <span>▶</span>';}
+  const people = [...Array.from({length:10},(_,i)=>({id:'F'+(i+1),label:'flagged',result:i<8?'alert':i===9?'unsure':'quiet'})),...Array.from({length:10},(_,i)=>({id:'O'+(i+1),label:'ordinary',result:i<3?'alert':i===9?'unsure':'quiet'}))];
+  const metrics={
+    precision:{question:'Of everything the model alerted on, how many were actually flagged?', numerator:p=>p.label==='flagged'&&p.result==='alert', denominator:p=>p.result==='alert', fraction:'8 ÷ 11 ≈ 72.7%', why:'8 true flags ÷ 11 total alerts. The 11 alerts are 8 flagged addresses plus 3 ordinary addresses.',note:'A higher precision means a larger share of alerts were labeled flagged. If there are no alerts, precision is unavailable.'},
+    recall:{question:'Of all flagged examples, how many did the model alert on?', numerator:p=>p.label==='flagged'&&p.result==='alert', denominator:p=>p.label==='flagged', fraction:'8 ÷ 10 = 80%', why:'8 true flags ÷ 10 flagged examples. The two missed flags include one unsure address.',note:'A higher recall means fewer flagged examples were missed. If there are no flagged examples, recall is unavailable.'},
+    fpr:{question:'Of all ordinary examples, how many did the model incorrectly alert on?', numerator:p=>p.label==='ordinary'&&p.result==='alert', denominator:p=>p.label==='ordinary', fraction:'3 ÷ 10 = 30%', why:'3 false alerts ÷ 10 ordinary examples. One ordinary example is unsure and does not alert.',note:'A lower false-alert rate means fewer ordinary addresses triggered alerts. If there are no ordinary examples, the rate is unavailable.'},
+    coverage:{question:'Of all addresses, how many received a score?', numerator:p=>p.result!=='unsure', denominator:p=>true, fraction:'18 ÷ 20 = 90%', why:'18 scored addresses ÷ 20 total addresses. One flagged and one ordinary address are unsure.',note:'Scored coverage is about whole addresses. Fragment coverage measures known pieces within one address; code coverage is a software-test measure.'}
+  };
+  function renderMetric(key) {
+    const metric=metrics[key];
+    $('metric-people').innerHTML=['flagged','ordinary'].map(label=>`<div class="people-row"><div class="people-title"><span>HUMAN LABEL</span><strong>${label} · 10</strong></div><div class="people-squares">${people.filter(p=>p.label===label).map(p=>`<div class="person ${p.result} ${metric.denominator(p)?'in-denominator':'outside'} ${metric.numerator(p)?'in-numerator':''}" title="${p.id}: ${label}, ${p.result==='quiet'?'no alert':p.result}" aria-label="${p.id}, ${label}, ${p.result==='quiet'?'no alert':p.result}">${p.id}</div>`).join('')}</div></div>`).join('');
+    $('metric-answer').innerHTML=`<div><span>THE QUESTION</span><h4>${metric.question}</h4><p>${metric.why}</p><small>${metric.note}</small></div><div class="metric-fraction"><span>THE ANSWER</span><strong>${metric.fraction}</strong><small><i></i> Green outline = counted on top<br><i class="denom"></i> Shaded = counted on bottom</small></div>`;
+    document.querySelectorAll('[data-metric]').forEach(button=>{const active=button.dataset.metric===key;button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));});
+  }
+  document.querySelectorAll('[data-metric]').forEach(button=>button.onclick=()=>renderMetric(button.dataset.metric));
+  document.querySelectorAll('[data-scroll]').forEach(button=>button.onclick=()=>document.getElementById(button.dataset.scroll).scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'}));
+  renderMetric('precision');
 })();

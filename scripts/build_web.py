@@ -10,7 +10,7 @@ files = {'engine.py':'engine.py', 'training.py':'training.py', 'local_ui.py':'lo
          'assets/PUBLIC_SUFFIX_LICENSE.md':'assets/PUBLIC_SUFFIX_LICENSE.md',
          'demo/model.json':'demo/model.json', 'demo/report.json':'demo/report.json',
          'demo/golden.json':'demo/golden.json', 'ui/app.js':'app.js', 'ui/style.css':'style.css',
-         'ui/review.js':'review.js', 'ui/routes.js':'routes.js', 'ui/learn.js':'learn.js', 'web/browser_backend.py':'browser_backend.py',
+         'ui/review.js':'review.js', 'ui/routes.js':'routes.js', 'ui/learn.js':'learn.js', 'ui/guide.css':'guide.css', 'ui/favicon.svg':'favicon.svg', 'web/browser_backend.py':'browser_backend.py',
          'web/worker.js':'worker.js', 'web/browser-api.js':'browser-api.js',
          'web/model-controls.js':'model-controls.js'}
 allowed = set(files.values()) | {'index.html'}
