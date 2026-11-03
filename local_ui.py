@@ -228,7 +228,10 @@ class Handler(BaseHTTPRequestHandler):
             with JOB_LOCK:
                 job = dict(JOBS[identifier]) if identifier in JOBS else None
             return self.respond(200, job) if job else self.respond(404, {'error': 'Training job not found; the server may have restarted.'})
-        files = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/review.js': ('review.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
+        if path == '/':
+            html = (UI / 'index.html').read_text(encoding='utf-8').replace('<!-- LEARN_PAGE -->', (UI / 'learn.html').read_text(encoding='utf-8'))
+            return self.respond(200, html.encode(), 'text/html; charset=utf-8')
+        files = {'/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/review.js': ('review.js', 'text/javascript; charset=utf-8'), '/routes.js': ('routes.js', 'text/javascript; charset=utf-8'), '/learn.js': ('learn.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
         if path in files:
             name, kind = files[path]
             return self.respond(200, (UI / name).read_bytes(), kind)

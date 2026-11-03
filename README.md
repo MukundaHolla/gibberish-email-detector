@@ -21,6 +21,14 @@ The server listens on your computer only. Training requires the installed depend
 
 ## How to use the interface
 
+Use the sidebar to switch between training, single-email testing, bulk testing, evaluation, model history, and **How it works**. Each section opens as its own view; switching views keeps the current browser session intact. In the browser edition, **Import & export** is a separate view as well. The screenshots below include examples from the earlier scrolling layout; the controls work the same way.
+
+### Explore the learning guide
+
+Open **How it works** to follow the animated training and detection walkthroughs, explore example metrics, and look up terms such as minimum coverage, validation, precision, recall, and false-alert rate. The guide also distinguishes fragment coverage and scored coverage from code coverage.
+
+![The interactive How it works guide.](docs/screenshots/07-guide.jpg)
+
 ### 1. Prepare your labeled files
 
 Create two UTF-8 files: **flagged** addresses reviewed for gibberish spelling and **ordinary** addresses. The label describes spelling, not whether a mailbox works or a person is fraudulent. Keep uncertain examples out of both files.
@@ -202,3 +210,26 @@ print(answer["score"], answer["decision"])
 - The code refuses contradictory labels for the same model input and identifies lines to review. It needs at least five independent eligible username groups per class for its five-fold split, both classes in all three partitions, and a nonempty training vocabulary. These are mechanical minimums. Use many more reviewed examples for any real performance estimate.
 - If tiny practice data produces an empty vocabulary, `--min-df 1` retains fragments seen in just one training address. The default is two. For an early learning exercise, the bundled examples give an immediate working reference.
 - Training reads labeled examples into memory. Batch inference streams a line at a time. Run real customer data in an approved environment. Keep real lists, result files, and private trained vocabularies out of a public release.
+
+## Browser edition and Cloudflare deployment
+
+The browser edition uses Pyodide to run the existing Python scoring and training code in a Web Worker. The browser downloads the pinned Pyodide runtime and, on first training, scikit-learn 1.8.0 from jsDelivr; selected email files and model files are processed in the browser and are not sent to an application server. An internet connection is needed to load the site and runtime. Large datasets and initial training may take time or exceed a device's memory.
+
+Use **Import model** to open a compatible project `model.json`. Choose a model in **Test an email**, then use **Download selected model**, **Download report**, or **Download reference cases**. Imported models and newly trained models exist only in the current browser session: download your artifacts before refreshing or closing the page. An imported `model.json` does not include a report or reference cases unless separately available. This edition does not support arbitrary pickle/joblib or models trained with unrelated software.
+
+To create a static Cloudflare Workers build from the allowlisted source files:
+
+```bash
+python3 scripts/build_web.py
+npx wrangler login
+npx wrangler deploy
+```
+
+`wrangler.jsonc` points Cloudflare at the generated `web-dist/` directory. The build refuses unexpected files in that directory rather than publishing them. Keep private datasets and trained model artifacts out of the directory and public source control. For local preview, run `python3 -m http.server 8766 --directory web-dist` and open `http://127.0.0.1:8766/`. The local server documented above remains an alternative for native Python training.
+
+The browser edition performs a golden-case check of the demo model during startup. To verify the Python adapters and export helpers locally, run:
+
+```bash
+python -m unittest -v test_browser_backend test_local_ui test_detector
+node --test test_review.js
+```
