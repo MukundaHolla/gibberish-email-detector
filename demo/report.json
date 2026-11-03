@@ -1,0 +1,61 @@
+{
+  "chosen_threshold": 0.49168835212570305,
+  "feature_count": 1439,
+  "ingestion": {
+    "flagged": {
+      "duplicate_lines": 0,
+      "eligible_unique": 240,
+      "excluded_unique": {},
+      "nonblank_lines": 240
+    },
+    "ordinary": {
+      "duplicate_lines": 0,
+      "eligible_unique": 240,
+      "excluded_unique": {},
+      "nonblank_lines": 240
+    }
+  },
+  "min_coverage": 0.2,
+  "min_df": 2,
+  "name": "demo-invented-v1",
+  "scikit_learn_version": "1.8.0",
+  "seed": 43,
+  "split_counts": {
+    "test": 96,
+    "train": 287,
+    "validation": 97
+  },
+  "test": {
+    "abstained": 12,
+    "coverage": 0.875,
+    "false_flags": 1,
+    "flagged": 48,
+    "missed_flags": 16,
+    "ordinary": 48,
+    "ordinary_false_flag_rate": 0.020833333333333332,
+    "ordinary_unflagged": 47,
+    "precision": 0.9696969696969697,
+    "recall": 0.6666666666666666,
+    "scored": 84,
+    "true_flags": 32
+  },
+  "training_class_counts": {
+    "flagged": 144,
+    "ordinary": 143
+  },
+  "validation": {
+    "abstained": 6,
+    "coverage": 0.9381443298969072,
+    "false_flags": 1,
+    "flagged": 48,
+    "missed_flags": 11,
+    "ordinary": 49,
+    "ordinary_false_flag_rate": 0.02040816326530612,
+    "ordinary_unflagged": 48,
+    "precision": 0.9736842105263158,
+    "recall": 0.7708333333333334,
+    "scored": 91,
+    "true_flags": 37
+  },
+  "validation_max_ordinary_false_flag_rate": 0.05
+}
