@@ -29,6 +29,14 @@ class BrowserBackendTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             browser.handle('import', {'content': json.dumps({'format': 'wrong'})}, lambda _: None)
 
+    def test_explanation_counts_include_repeated_and_unknown_fragments(self):
+        for email in ('mukunda@gmail.com', 'fdgafvfsd@gmail.com', 'aaaa@gmail.com'):
+            result = browser.handle('score', {'model': 'demo', 'email': email}, lambda _: None)
+            for field in ('user', 'domain'):
+                self.assertEqual(len(result['fragments'][field]), result['coverage'][field]['total'])
+                self.assertEqual(len(result['known_fragments'][field]), result['coverage'][field]['known'])
+            self.assertEqual(result['min_coverage'], .2)
+
     def test_preview_and_evaluation(self):
         data = {'flagged': {'name': 'flagged.txt', 'content': 'qzxv8801@gmail.com\nbroken@@example.com\n'},
                 'ordinary': {'name': 'ordinary.csv', 'content': 'email\nmukunda@gmail.com\n'}}

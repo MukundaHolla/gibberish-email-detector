@@ -87,16 +87,48 @@ $('train-button').onclick = async () => {
     status('training-status',message,true);
   } finally { button.disabled=false; }
 };
+function scoreStory(r, address) {
+  const names = {looks_gibberish:'Looks flagged', looks_ordinary:'Looks ordinary', unsure:'Unsure', score_only:'Score only'};
+  const reasonText = {empty_input:'The address is empty.', unsupported_address_form:'This address uses a form the model does not support.', invalid_address_shape:'The address is not in a supported email format.', recognized_private_relay:'This is a recognized private relay address, which the model does not score.', no_recognized_registrable_domain:'The domain does not have a recognized registrable label.', component_too_short:'The username or domain label is too short to score.'};
+  let conclusion;
+  if (!r.parts) conclusion = reasonText[r.reason] || 'This address could not be prepared for scoring.';
+  else if (r.decision === 'unsure') {
+    const weak = ['user','domain'].filter(f => r.coverage[f].known === 0 || r.coverage[f].fraction < r.min_coverage).map(f => f === 'user' ? 'username' : 'domain label');
+    conclusion = `The ${weak.join(' and ')} ${weak.length === 1 ? 'does' : 'do'} not have enough known pieces. Each part must have at least one known piece and reach the model’s ${pct(r.min_coverage)} minimum. The model stops here, so there is no score or flagged/ordinary decision.`;
+  } else if (r.decision === 'score_only') conclusion = 'The model produced a score, but it has no saved decision threshold. It cannot label this address flagged or ordinary.';
+  else conclusion = `The score is ${r.decision === 'looks_gibberish' ? 'at or above' : 'below'} the saved threshold, so the model suggests ${r.decision === 'looks_gibberish' ? 'flagged' : 'ordinary'}. This is a spelling-pattern suggestion, not a human label or proof about the address.`;
+  const title = names[r.decision] || r.decision;
+  let html = `<div class="result score-story"><div class="story-result-head"><div><span class="story-kicker">YOUR RESULT · ${escapeHTML(r.model)}</span><h3>${escapeHTML(title)}</h3><p>${escapeHTML(conclusion)}</p></div><span class="story-result-icon">${r.decision === 'unsure' ? '?' : '✳'}</span></div>`;
+  if (!r.parts) return html + `<div class="story-invalid"><b>What happened?</b><p>${escapeHTML(conclusion)} No fragments or coverage were calculated.</p></div></div>`;
+  const raw = address.trim().toLowerCase();
+  html += `<div class="score-step"><div class="score-step-label"><span>01</span><div><b>First, split the address</b><p>The model makes a lowercase copy for analysis.</p></div></div><div class="address-split"><div><small>USERNAME · BEFORE @</small><strong>${escapeHTML(r.parts.username)}</strong></div><i>@</i><div><small>FULL DOMAIN · AFTER @</small><strong>${escapeHTML(raw.split('@')[1])}</strong></div></div><p>From the full domain, the model selects <b>${escapeHTML(r.parts.domain_label)}</b> as the registrable domain label. It leaves out other domain parts, such as subdomains and the suffix.</p></div>`;
+  html += `<div class="score-step"><div class="score-step-label"><span>02</span><div><b>Break each part into pieces</b><p>Overlapping groups of 2, 3 and 4 characters are called fragments. A repeated piece counts each time it appears.</p></div></div><div class="fragment-legend"><span class="known-key"></span> Known to this model <span class="unknown-key"></span> Not known to this model</div><div class="coverage-panels">`;
+  for (const [field,label,part] of [['user','Username',r.parts.username],['domain','Domain label',r.parts.domain_label]]) {
+    const stats = r.coverage[field], known = new Set(r.known_fragments[field]);
+    const pieces = r.fragments[field].map(g=>`<span class="score-fragment ${known.has(g) ? 'known' : 'unknown'}" title="${known.has(g) ? 'Known' : 'Not known'}">${escapeHTML(g)}</span>`).join('');
+    html += `<div class="coverage-panel"><div class="coverage-heading"><div><small>${escapeHTML(label.toUpperCase())}</small><b>${escapeHTML(part)}</b></div><strong>${stats.known} <i>/</i> ${stats.total}</strong></div><div class="score-fragments">${pieces}</div><div class="coverage-equation"><b>${stats.known} known</b> ÷ ${stats.total} total = <strong>${pct(stats.fraction)} coverage</strong></div><div class="coverage-bar"><span style="width:${Math.max(0,Math.min(100,stats.fraction*100))}%"></span></div><p>${stats.known === 0 || stats.fraction < r.min_coverage ? 'Below the requirement (or no known pieces).' : 'Meets the coverage requirement.'}</p></div>`;
+  }
+  html += `</div><p class="coverage-explainer">The minimum is <b>${pct(r.min_coverage)}</b> for each part, with at least one known piece. “Known” means the fragment is in this model’s vocabulary; it does not mean the complete address was in the training data.</p></div>`;
+  html += `<div class="score-step"><div class="score-step-label"><span>03</span><div><b>How the model reached its result</b><p>${r.score == null ? 'The model stopped before calculating a score.' : 'Known pieces contribute in different directions according to what the model learned.'}</p></div></div>`;
+  if (r.math) {
+    const num = n => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(4)}`;
+    html += `<div class="score-math"><div><small>STARTING VALUE</small><b>${num(r.math.intercept)}</b></div><span>+</span><div><small>USERNAME PIECES</small><b>${num(r.math.user_sum)}</b></div><span>+</span><div><small>DOMAIN PIECES</small><b>${num(r.math.domain_sum)}</b></div><span>=</span><div><small>COMBINED VALUE</small><b>${num(r.math.margin)}</b></div></div><p>The model combines its starting value with the effects of the known pieces, then converts that value to a score between 0 and 1. Positive effects push toward flagged; negative effects push toward ordinary. Values above are rounded.</p><div class="score-verdict"><div><small>MODEL SCORE</small><b>${r.score.toFixed(6)}</b></div><span>${r.threshold == null ? '→' : r.decision === 'looks_gibberish' ? '≥' : '<'}</span><div><small>SAVED THRESHOLD</small><b>${r.threshold == null ? 'None' : r.threshold.toFixed(6)}</b></div><span>→</span><div><small>RESULT</small><b>${escapeHTML(title)}</b></div></div><p>${escapeHTML(conclusion)} Comparisons use full precision; displayed numbers are rounded.</p>`;
+    if (r.contributions?.length) html += `<details class="score-details"><summary>See the strongest individual fragment effects</summary><div class="table-wrap"><table><thead><tr><th>FRAGMENT</th><th>LEARNED WEIGHT</th><th>EFFECT ON COMBINED VALUE</th></tr></thead><tbody>${r.contributions.slice(0,12).map(x=>`<tr><td>${escapeHTML(x.term)}</td><td>${x.weight.toFixed(4)}</td><td>${num(x.points)}</td></tr>`).join('')}</tbody></table></div><p>Effect combines the learned weight with the fragment’s normalized value; it is not a percentage.</p></details>`;
+  } else html += `<div class="score-stop"><b>Coverage check → Unsure</b><p>${escapeHTML(conclusion)}</p></div>`;
+  return html + `</div></div>`;
+}
 $('score').onclick = async () => {
+  const button = $('score');
   try {
+    const email = $('email').value;
+    button.disabled = true;
+    $('score-result').innerHTML = '';
     status('score-status','Analyzing…');
-    const r = await api('/api/score',{email:$('email').value,model:$('model').value});
-    let html = `<div class="result"><h4>${escapeHTML(r.decision.replaceAll('_',' '))}</h4><div class="metrics">${metric(r.score == null ? '—' : r.score.toFixed(4),'model score')}${metric(r.threshold == null ? '—' : r.threshold.toFixed(4),'decision threshold')}${r.coverage ? metric(pct(r.coverage.user.fraction),'username coverage') + metric(pct(r.coverage.domain.fraction),'domain coverage') : ''}</div>`;
-    if (r.reason) html += `<p>Reason: ${escapeHTML(r.reason.replaceAll('_',' '))}</p>`;
-    if (r.parts) html += `<p>Model inputs: <b>${escapeHTML(r.parts.username)}</b> (username) and <b>${escapeHTML(r.parts.domain_label)}</b> (domain label).</p>`;
-    if (r.contributions?.length) html += `<h4>Strongest fragment contributions</h4><table><thead><tr><th>FRAGMENT</th><th>WEIGHT</th><th>CONTRIBUTION</th></tr></thead><tbody>${r.contributions.slice(0,8).map(x=>`<tr><td>${escapeHTML(x.term)}</td><td>${x.weight.toFixed(4)}</td><td>${x.points >= 0 ? '+' : ''}${x.points.toFixed(4)}</td></tr>`).join('')}</tbody></table><p>Positive contributions push toward flagged; negative contributions push toward ordinary.</p>`;
-    $('score-result').innerHTML=html+'</div>'; status('score-status','');
-  } catch(e) { status('score-status',e.message,true); }
+    const r = await api('/api/score',{email,model:$('model').value});
+    $('score-result').innerHTML = scoreStory(r,email);
+    status('score-status','');
+  } catch(e) { $('score-result').innerHTML = ''; status('score-status',e.message,true); }
+  finally { button.disabled = false; }
 };
 let batchResults = [];
 let batchPage = 0;

@@ -138,6 +138,9 @@ def score_parts(parts, model, *, explain=False):
         output["parts"] = {"username": parts.username, "domain_label": parts.domain}
         output["fragments"] = {f: list(grams(t)) for f, t in
                                (("user", parts.username), ("domain", parts.domain))}
+        output["known_fragments"] = {f: [g for g in items if f + ':' + g in model["terms"]]
+                                     for f, items in output["fragments"].items()}
+        output["min_coverage"] = model["min_coverage"]
     weak = [f for f, stat in coverage.items()
             if stat["known"] == 0 or stat["fraction"] < model["min_coverage"]]
     if weak:
