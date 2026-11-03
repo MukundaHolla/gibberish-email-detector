@@ -1,8 +1,18 @@
 # Standalone gibberish email detector
 
-Give the trainer two local text files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels. The saved model can score a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
+Give the trainer two labeled TXT or CSV files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels. The saved model can score a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
 
 If machine learning is new to you, start with [How it works](HOW_IT_WORKS.md). It follows one email all the way from characters to a numeric score and includes training and prediction flow diagrams.
+
+## Try the browser app
+
+Open [Signal Studio](https://gibberish-email-detector.mukundaholla.workers.dev/) to try the demo, train with your own labeled files, test addresses, and explore the guide. No account is needed. The app downloads its Python runtime and training dependencies from jsDelivr; selected files and training run in the browser. Internet access is needed to load the app and dependencies.
+
+![Signal Studio home page in the charcoal and coral theme.](docs/screenshots/00-home.jpg)
+
+The sidebar has one page per feature. Use the menu button to collapse it and **Dark mode** / **Light mode** to switch themes; the browser remembers the theme choice. Models trained or imported in the browser last only for the current session. Download them before reloading or closing the page.
+
+![Signal Studio home page in dark mode.](docs/screenshots/08-dark.jpg)
 
 ## Get started with the local interface
 
@@ -21,11 +31,11 @@ The server listens on your computer only. Training requires the installed depend
 
 ## How to use the interface
 
-Use the sidebar to switch between training, single-email testing, bulk testing, evaluation, model history, and **How it works**. Each section opens as its own view; switching views keeps the current browser session intact. In the browser edition, **Import & export** is a separate view as well. The screenshots below include examples from the earlier scrolling layout; the controls work the same way.
+Use the sidebar to open **Home**, **Train a model**, **Test an email**, **Import & export** (browser edition), **Test a list**, **Evaluate a model**, or **How it works**. Each feature has its own view; switching views keeps the current session. **Model history** is linked in the footer. The screenshots below show the hosted browser edition; local storage and training behavior differ as described below.
 
 ### Explore the learning guide
 
-Open **How it works** to follow the animated training and detection walkthroughs, explore example metrics, and look up terms such as minimum coverage, validation, precision, recall, and false-alert rate. The guide also distinguishes fragment coverage and scored coverage from code coverage.
+Open **How it works** for a plain-English glossary and interactive training and detection walkthroughs. The training walkthrough shows how labeled examples become a model; the detection walkthrough follows the demo score for `mukunda@gmail.com`. The results lesson uses six fictional addresses to explain precision, recall, false alerts, and scored coverage. The guide distinguishes fragment coverage and scored coverage from code coverage.
 
 ![The interactive How it works guide.](docs/screenshots/07-guide.jpg)
 
@@ -34,19 +44,19 @@ Open **How it works** to follow the animated training and detection walkthroughs
 Create two UTF-8 files: **flagged** addresses reviewed for gibberish spelling and **ordinary** addresses. The label describes spelling, not whether a mailbox works or a person is fraudulent. Keep uncertain examples out of both files.
 
 - **TXT:** Put one complete email address on each line, with no header. Blank lines are ignored.
-- **CSV:** Include a header row. A column named `email`, `email address`, or `email_address` is detected automatically. Otherwise, enter its exact header in the CSV column field.
+- **CSV:** Include a header row. A column named `email`, `email address`, or `email_address` is detected automatically. Otherwise, expand **CSV column name (optional)** and enter the exact column header, such as `contact_email`. This field is for a column name, not pasted addresses; it is unnecessary for TXT files.
 - Keep independent holdout data aside before training. Use many reviewed examples; the code's minimum of five eligible username groups per class is only a mechanical requirement.
 
 For a practice run, use the invented files [examples/flagged.txt](examples/flagged.txt) and [examples/ordinary.txt](examples/ordinary.txt).
 
 ### 2. Review the data and train
 
-![The local app's training area, with separate file inputs for flagged and ordinary examples.](docs/screenshots/01-train.jpg)
+![The browser training page with separate file uploads for flagged and ordinary examples.](docs/screenshots/01-train.jpg)
 
-1. Under **Train a model**, choose the flagged and ordinary files. For CSV files, enter the column names if needed.
+1. Under **Train a model**, use **Upload TXT or CSV** to choose each file. The filename appears beside the button. For a CSV with a nonstandard email-column name, expand **CSV column name (optional)** and enter the exact header.
 2. Click **Preview data** to see duplicates, contradictory labels, and unsupported addresses. Select rows and click **Exclude selected & review again** to leave them out of this run; your original files are not changed. Replacing a file or changing a CSV column resets these exclusions.
 3. Optionally enter a model name and expand **Training settings**. The defaults are a minimum fragment frequency of 2, minimum component coverage of 20%, and validation false-alert budget of 5%. The budget is a target measured on the validation data, not a future guarantee.
-4. Click **Train model**. The status shows the current stage. Only one UI training run can run at a time. Refreshing the page loses the progress view, but training can continue while the server runs; stopping the server interrupts it.
+4. Click **Train model**. The status shows the current stage, and only one UI training run can run at a time. In the browser edition, keep the page open until training finishes and download the model before leaving. In the local edition, refreshing loses the progress view but training can continue while the server runs; stopping the server interrupts it.
 5. Review the saved model's test metrics. The newly trained model is selected for testing, bulk analysis, and evaluation. Use fresh, independent data for a further performance check.
 
 ### 3. Test one email
@@ -54,10 +64,16 @@ For a practice run, use the invented files [examples/flagged.txt](examples/flagg
 ![An invented email being scored, showing its decision, score, threshold, coverage, and fragment contributions.](docs/screenshots/02-test.jpg)
 
 1. Under **Test an email**, select the demo or one of your saved models.
-2. Enter a complete address and click **Analyze email**.
-3. Read the decision, score, threshold, coverage, and strongest fragment contributions. Positive contributions push toward flagged; negative ones push toward ordinary.
+2. Enter a complete address or select one of the example buttons, then click **Analyze email**.
+3. Follow the result from the username/domain split through known and unknown fragments, coverage, the score calculation, and the saved threshold. Expand **See the strongest individual fragment effects** for more detail. Positive effects push toward flagged; negative effects push toward ordinary. Low coverage can lead to **unsure** without a score.
 
 `looks_gibberish` and `looks_ordinary` are model decisions, not proof of fraud or deliverability. `unsure` means the model declined to score; inspect the reason. `score_only` means it could calculate a score but has no saved cutoff.
+
+### Import and export a model (browser edition)
+
+![Import and export controls in the browser edition.](docs/screenshots/09-import-export.jpg)
+
+Open **Import & export** to load a compatible `model.json` (up to 10 MiB). Imported and newly trained models are selected automatically. To save a model for another session, select it on **Test an email**, return to **Import & export**, and download the model. You can also download its report and reference cases when available. An imported model does not automatically include those other files.
 
 ### 4. Test and review a list
 
@@ -73,7 +89,7 @@ To build a reviewed dataset, mark binary decisions **Correct**, **Incorrect**, o
 
 ### 5. Evaluate on independent data
 
-![The holdout evaluation form with two example files selected.](docs/screenshots/05-evaluate.jpg)
+![The holdout evaluation form with separate file uploads.](docs/screenshots/05-evaluate.jpg)
 
 1. Set aside separate, labeled flagged and ordinary files that were not used to train or select the model, preferably collected later and from an independent source.
 2. Under **Evaluate a model**, select the model, choose the holdout files, and click **Evaluate model**.
@@ -86,14 +102,13 @@ The screenshots use the invented demonstration files to show the workflow. Those
 
 ### 6. Compare saved models
 
-Under **Model history**, select **Use model** to select a saved model across the testing and evaluation sections. Choose two models under **Compare two models** to inspect their reported settings and test metrics. The displayed date is the model file's last-modified time, not a guaranteed training date. Results from different test sets aren't directly comparable; evaluate both models on the same independent holdout for a fairer comparison.
+Open **Model history** from the footer and select **Use model** to select a saved model across the testing and evaluation sections. Choose two models under **Compare two models** to inspect their reported settings and test metrics. The displayed date is the model file's last-modified time, not a guaranteed training date. Results from different test sets aren't directly comparable; evaluate both models on the same independent holdout for a fairer comparison.
 
 ### Where data is saved
 
-- Trained models are in `runs/<model-id>/`: `model.json`, `report.json`, and `golden.json`. The included demo is in `demo/`.
-- Your original input files stay where you put them. Temporary copies of training and holdout lists are written to the system temporary directory and removed after the operation.
-- Bulk and review results remain in the browser until downloaded; downloads go to your browser's download location. Models and downloaded results can contain sensitive address information or learned fragments. Keep them out of public repositories.
-- Do not expose the local server as a public, multi-user service; it is designed for use on your own computer.
+- **Browser edition:** Selected files are processed in the browser. Trained and imported models, and batch review choices, last for the current session. Download models, reports, and review results before refreshing or closing the page. The app does not provide a shared server-side model database.
+- **Local edition:** Trained models are saved in `runs/<model-id>/` as `model.json`, `report.json`, and `golden.json`. The demo is in `demo/`. Original input files stay where you put them; temporary copies are removed after the operation. Local batch review choices remain in the browser until exported.
+- Downloads go to your browser's download location. Models and results may contain sensitive addresses or learned fragments; keep private data out of public repositories. The local server is designed for use on your own computer, not as a public multi-user service.
 
 ## Command-line usage
 
@@ -197,7 +212,7 @@ print(answer["score"], answer["decision"])
 | `demo/model.json` | The learned demo weights and associated scoring settings. |
 | `demo/report.json` | Counts and evaluation results from training the demo. This is the file to read when assessing quality. |
 | `demo/golden.json` | Ten fixed invented inputs and their expected outputs for repeatability. |
-| `test_detector.py`, `test_local_ui.py`, `test_review.js` | Regression checks for the detector and local interface. Run `python -m unittest -v test_detector test_local_ui` and `node --test test_review.js` after installing the training dependency. |
+| `test_browser_backend.py`, `test_detector.py`, `test_local_ui.py`, `test_review.js` | Regression checks for the browser adapter, detector, local interface, and review helpers. Run the commands in [Testing](#testing). |
 | `README.md` and `HOW_IT_WORKS.md` | Commands and an illustrated explanation. |
 | `.venv/` | Created on your computer. Holds the project-specific Python environment and installed dependencies. |
 | `runs/` and `results/` | Created by the commands above for your own models and local predictions. |
@@ -227,12 +242,16 @@ npx wrangler deploy
 
 `wrangler.jsonc` points Cloudflare at the generated `web-dist/` directory. The build refuses unexpected files in that directory rather than publishing them. Keep private datasets and trained model artifacts out of the directory and public source control. For local preview, run `python3 -m http.server 8766 --directory web-dist` and open `http://127.0.0.1:8766/`. The local server documented above remains an alternative for native Python training.
 
-The browser edition performs a golden-case check of the demo model during startup. To verify the Python adapters and export helpers locally, run:
+## Testing
+
+The browser edition checks the demo model against its saved reference cases at startup. To run the Python adapter, detector, and local-interface tests plus the JavaScript review tests, activate your environment and run:
 
 ```bash
 python -m unittest -v test_browser_backend test_local_ui test_detector
 node --test test_review.js
 ```
+
+These checks verify behavior and compatibility; they are not a real-world accuracy measurement. Evaluate model quality on independent, representative labeled addresses.
 
 ## Performance testing
 
