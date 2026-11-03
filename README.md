@@ -112,3 +112,16 @@ print(answer["score"], answer["decision"])
 - The code refuses contradictory labels for the same model input and identifies lines to review. It needs at least five independent eligible username groups per class for its five-fold split, both classes in all three partitions, and a nonempty training vocabulary. These are mechanical minimums. Use many more reviewed examples for any real performance estimate.
 - If tiny practice data produces an empty vocabulary, `--min-df 1` retains fragments seen in just one training address. The default is two. For an early learning exercise, the bundled examples give an immediate working reference.
 - Training reads labeled examples into memory. Batch inference streams a line at a time. Run real customer data in an approved environment. Keep real lists, result files, and private trained vocabularies out of a public release.
+
+## Local web interface
+
+Run the interface from the project directory with Python 3.11 or later:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python local_ui.py
+```
+
+Open `http://127.0.0.1:8765` in your browser. The server listens only on your computer; stop it with Ctrl-C. Choose separate flagged and ordinary TXT or CSV files, preview them, and train. TXT uses one address per line. CSV requires a header row; columns named `email`, `email address`, or `email_address` are detected automatically, or you can enter the exact column name. The interface saves trained models and reports in `runs/`, selects the new model, and lets you test individual addresses with coverage and feature contributions. Files and results stay local; the uploaded lists are temporarily written to your system's temporary directory during training and removed afterward. The interface currently uses the existing default training settings and does not provide bulk scoring or independent holdout evaluation; those remain available through the CLI.
