@@ -43,8 +43,8 @@ flowchart TD
 ```
 
 1. **Give each complete address an answer.** Putting an email in `flagged.txt` assigns label `1` and putting it in `ordinary.txt` assigns `0`. The task is to learn resemblance to addresses flagged for **gibberish spelling**. If a flagged batch was selected because of unusual payments or mailing volume, those labels answer a different question. Review the reason for your positives before training.
-2. **Prepare the spelling.** For `RAVI@mail.vendor.co.in`, the supported-ASCII feature copy contains username `ravi` and registrable domain label `vendor`. The suffix lookup recognizes `co.in`. The subdomain `mail` and the suffix do not become spelling features. Dots, plus tags, and digits within the username are preserved. Email identity and mail delivery do not use this feature copy.
-3. **Remove duplicates and label conflicts.** Identical model inputs count once. For example, `ravi@vendor.com` and `RAVI@mail.vendor.co.in` have identical model inputs in this version. If the two lists disagree on one such input, the trainer reports the two source lines so you can resolve them.
+2. **Prepare the spelling.** For `MUKUNDA@mail.vendor.co.in`, the supported-ASCII feature copy contains username `mukunda` and registrable domain label `vendor`. The suffix lookup recognizes `co.in`. The subdomain `mail` and the suffix do not become spelling features. Dots, plus tags, and digits within the username are preserved. Email identity and mail delivery do not use this feature copy.
+3. **Remove duplicates and label conflicts.** Identical model inputs count once. For example, `mukunda@vendor.com` and `MUKUNDA@mail.vendor.co.in` have identical model inputs in this version. If the two lists disagree on one such input, the trainer reports the two source lines so you can resolve them.
 4. **Set aside examples for separate jobs.** A deterministic, class-stratified split uses five groups of rows, approximately equal in size. Three folds supply training, one supplies validation, and one supplies final testing. Addresses with the same username stem before a plus tag stay together across providers. The score still sees the plus tag. This reduces easy leakage. A separate later evaluation should also hold out related campaigns or generators when you know those relationships.
 5. **Turn each spelling into a numeric vector.** Collect overlapping fragments 2, 3 and 4 characters long within each component. Record counts under distinct names such as `user:ra` and `domain:ra`. The vocabulary is learned using training rows only. The default retains features that occur in at least two training addresses, up to 50,000 features.
 6. **Learn weights with scikit-learn.** Scikit-learn is a Python library providing numerical implementations of machine-learning algorithms. The vectorizer calculates feature values. Its logistic regression implementation fits weights by minimizing prediction error across the training rows. In this version `class_weight="balanced"` gives the two classes equal aggregate weight during fitting. An L2 penalty discourages large coefficients that are insufficiently supported. `C=1.0` sets the regularization trade-off.
@@ -59,7 +59,7 @@ Suppose a training row is labeled `1` and the current weights produce `0.20`. Th
 
 In this implementation a model file is readable JSON. It stores the model name, schema and preprocessor versions, the intercept, a vocabulary mapping every learned feature to `[idf, weight]`, the minimum coverage needed, and the operating threshold. The weights and IDFs come from training. Coverage is an explicit setting. The cutoff is selected on validation data.
 
-For example, in the bundled model, `user:ra` has IDF approximately `3.367124` and learned coefficient approximately `-0.537028`. The number of occurrences and the other features of the specific address determine how much this entry contributes to that address's score. The model file contains short learned spelling fragments. Treat vocabularies trained on real addresses as controlled data.
+For example, in the bundled model, `user:un` has IDF approximately `4.178054` and learned coefficient approximately `-0.482349`. The number of occurrences and the other features of the specific address determine how much this entry contributes to that address's score. The model file contains short learned spelling fragments. Treat vocabularies trained on real addresses as controlled data.
 
 ## Follow a prediction
 
@@ -79,38 +79,38 @@ flowchart TD
 
 The diagram assumes a saved numeric cutoff. `score_only` is the extra policy outcome when validation could not supply one.
 
-### Run the calculation for ravi@gmail.com
+### Run the calculation for mukunda@gmail.com
 
 ```bash
-python3 detector.py explain 'ravi@gmail.com' --all
+python3 detector.py explain 'mukunda@gmail.com' --all
 ```
 
-**Step A. Preprocess.** The inputs are `ravi` and `gmail`. **Step B. Make n-grams.** An n-gram is a consecutive substring of length n. For `ravi` the bigrams are `ra`, `av`, `vi`, the trigrams are `rav` and `avi`, and the four-character fragment is `ravi`. The domain yields nine fragments, including `gm`, `mai`, and `mail`.
+**Step A. Preprocess.** The inputs are `mukunda` and `gmail`. **Step B. Make n-grams.** An n-gram is a consecutive substring of length n. For `mukunda` the bigrams are `mu`, `uk`, `ku`, `un`, `nd`, and `da`; the trigrams are `muk`, `uku`, `kun`, `und`, and `nda`; and the four-character fragments are `muku`, `ukun`, `kund`, and `unda`. The domain yields nine fragments, including `gm`, `mai`, and `mail`.
 
-**Step C. Measure coverage.** The training vocabulary contains `user:ra`, `user:av`, and `user:vi`. The other three username fragments were absent or did not meet the vocabulary inclusion rule. Username coverage is `3 / 6 = 50%`. Domain coverage is `9 / 9 = 100%`. Each clears the demo's 20% minimum. Coverage counts fragment occurrences, including repeats. It measures familiarity of the representation. The learned weights determine the direction of the score.
+**Step C. Measure coverage.** The training vocabulary contains `user:ku`, `user:un`, `user:nd`, `user:da`, and `user:und`. The other ten username fragments were absent or did not meet the vocabulary inclusion rule. Username coverage is `5 / 15 ≈ 33.3%`. Domain coverage is `9 / 9 = 100%`. Each clears the demo's 20% minimum. Coverage counts fragment occurrences, including repeats. It measures familiarity of the representation. The learned weights determine the direction of the score.
 
-**Step D. Convert counts to TF-IDF values.** TF stands for term frequency, the number of times a recognized fragment occurs in this address. IDF stands for inverse document frequency, a number that reflects how widely the fragment appeared across training addresses. If there are `N` training addresses and `df` of them contain that fragment, the smoothed IDF is `1 + ln((1 + N)/(1 + df))`. Multiply count by IDF, then divide each value by the Euclidean length of the full known-feature vector. This gives you the input value for each weight. For example, `user:ra` has a normalized input of `0.291522` here.
+**Step D. Convert counts to TF-IDF values.** TF stands for term frequency, the number of times a recognized fragment occurs in this address. IDF stands for inverse document frequency, a number that reflects how widely the fragment appeared across training addresses. If there are `N` training addresses and `df` of them contain that fragment, the smoothed IDF is `1 + ln((1 + N)/(1 + df))`. Multiply count by IDF, then divide each value by the Euclidean length of the full known-feature vector. This gives you the input value for each weight. For example, `user:un` has a normalized input of `0.305548` here.
 
-**Step E. Add the learned contributions.** The normalized value for `user:ra` multiplied by its coefficient `-0.537028` contributes `-0.156555`. Repeating the calculation for all known features gives this actual summary, with rounded values.
+**Step E. Add the learned contributions.** The normalized value for `user:un` multiplied by its coefficient `-0.482349` contributes `-0.147381`. Repeating the calculation for all known features gives this actual summary, with rounded values.
 
 | Quantity | Contribution |
 |---|---:|
-| Starting weight, called the intercept | +0.434979 |
-| Sum across username features | −0.259001 |
-| Sum across domain features | −0.643365 |
-| Total, called the margin | −0.467387 |
+| Starting weight, called the intercept | +0.419901 |
+| Sum across username features | −0.401212 |
+| Sum across domain features | −0.372028 |
+| Total, called the margin | −0.353338 |
 
-**Step F. Convert the margin to a score.** Apply `score = 1 / (1 + exp(-margin))`. This S-shaped function is called the sigmoid. Here the score is `0.385235`. The saved cutoff is `0.491688`, so the output label is `looks_ordinary`.
+**Step F. Convert the margin to a score.** Apply `score = 1 / (1 + exp(-margin))`. This S-shaped function is called the sigmoid. Here the score is `0.412573`. The saved cutoff is `0.450770`, so the output label is `looks_ordinary`.
 
-For `qzxv8801@gmail.com`, the username contributes `+1.145849`, the domain contributes `−0.488835` and the score is `0.748757`. The domain contribution can differ even though the host matches because the model normalizes the **combined** vector. On this example, changing the cutoff to `0.80` changes only the returned label. The underlying score remains `0.748757`.
+For `qzxv8801@gmail.com`, the username contributes `+1.144488`, the domain contributes `−0.316720` and the score is `0.776896`. The domain contribution can differ even though the host matches because the model normalizes the **combined** vector. On this example, changing the cutoff to `0.80` changes only the returned label. The underlying score remains `0.776896`.
 
 ### Three words with different meanings
 
 | Word | Question it answers | Example |
 |---|---|---|
-| Fragment coverage | How much of each component can this vocabulary represent? | `3 / 6` recognized username fragments |
-| Score | Given enough coverage, how strongly do the learned weights favor the flagged label? | `0.748757` |
-| Decision threshold | How high must the score be for this application to raise a flag? | `score >= 0.491688` in this demo |
+| Fragment coverage | How much of each component can this vocabulary represent? | `5 / 15` recognized username fragments |
+| Score | Given enough coverage, how strongly do the learned weights favor the flagged label? | `0.776896` |
+| Decision threshold | How high must the score be for this application to raise a flag? | `score >= 0.450770` in this demo |
 
 To **abstain** means to return `unsure` and a null score. Try `python3 detector.py explain '||||||||@gmail.com'`. The username has 18 fragment occurrences and the vocabulary recognizes zero. A familiar provider cannot establish how the unseen username should be scored. Other abstention reasons include unsupported input forms, username or domain label shorter than three characters, private relay hosts recognized by the bundled policy, and unrecognized public suffixes. Every scorable input gets a continuous score. Its numerical interpretation is relative to the training task and population. Probability claims require calibration on representative data.
 
@@ -120,11 +120,11 @@ The fixture contains 240 invented ordinary and 240 invented flagged addresses. O
 
 | Stage | Full addresses used | Purpose |
 |---|---:|---|
-| Training | 287 (144 flagged, 143 ordinary) | Learn 1,439 feature weights plus an intercept |
+| Training | 287 (144 flagged, 143 ordinary) | Learn 1,414 feature weights plus an intercept |
 | Validation | 97 | Select the cutoff at the configured false-alert budget |
 | Final test | 96 | Measure the frozen demo model |
 
-On the final 96, 48 were labeled flagged and 48 ordinary. The model caught 32 of the 48 flagged examples and falsely flagged one ordinary example. It issued a score for 84 of the 96 and abstained on 12. The test data has the same invented provenance as the training fixture. The results demonstrate the workflow. Your performance estimate must come from your reviewed population.
+On the final 96, 48 were labeled flagged and 48 ordinary. The model caught 36 of the 48 flagged examples and falsely flagged seven ordinary examples. It issued a score for 86 of the 96 and abstained on 10. The test data has the same invented provenance as the training fixture. The results demonstrate the workflow. Your performance estimate must come from your reviewed population.
 
 | Report term | Meaning |
 |---|---|

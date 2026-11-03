@@ -1,6 +1,6 @@
 {
-  "chosen_threshold": 0.49168835212570305,
-  "feature_count": 1439,
+  "chosen_threshold": 0.4507699727117652,
+  "feature_count": 1414,
   "ingestion": {
     "flagged": {
       "duplicate_lines": 0,
@@ -26,36 +26,36 @@
     "validation": 97
   },
   "test": {
-    "abstained": 12,
-    "coverage": 0.875,
-    "false_flags": 1,
+    "abstained": 10,
+    "coverage": 0.8958333333333334,
+    "false_flags": 7,
     "flagged": 48,
-    "missed_flags": 16,
+    "missed_flags": 12,
     "ordinary": 48,
-    "ordinary_false_flag_rate": 0.020833333333333332,
-    "ordinary_unflagged": 47,
-    "precision": 0.9696969696969697,
-    "recall": 0.6666666666666666,
-    "scored": 84,
-    "true_flags": 32
+    "ordinary_false_flag_rate": 0.14583333333333334,
+    "ordinary_unflagged": 41,
+    "precision": 0.8372093023255814,
+    "recall": 0.75,
+    "scored": 86,
+    "true_flags": 36
   },
   "training_class_counts": {
     "flagged": 144,
     "ordinary": 143
   },
   "validation": {
-    "abstained": 6,
-    "coverage": 0.9381443298969072,
-    "false_flags": 1,
+    "abstained": 14,
+    "coverage": 0.8556701030927835,
+    "false_flags": 2,
     "flagged": 48,
-    "missed_flags": 11,
+    "missed_flags": 13,
     "ordinary": 49,
-    "ordinary_false_flag_rate": 0.02040816326530612,
-    "ordinary_unflagged": 48,
-    "precision": 0.9736842105263158,
-    "recall": 0.7708333333333334,
-    "scored": 91,
-    "true_flags": 37
+    "ordinary_false_flag_rate": 0.04081632653061224,
+    "ordinary_unflagged": 47,
+    "precision": 0.9459459459459459,
+    "recall": 0.7291666666666666,
+    "scored": 83,
+    "true_flags": 35
   },
   "validation_max_ordinary_false_flag_rate": 0.05
 }

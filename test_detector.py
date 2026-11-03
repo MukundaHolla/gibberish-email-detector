@@ -17,8 +17,8 @@ class DetectorTests(unittest.TestCase):
 
     def test_normalization(self):
         for email, expected in [("  ANU+SHOP@mail.host.co.in ", ("anu+shop", "host")),
-                                ("ravi@a.b.ck", None), ("ravi@sub.www.ck", ("ravi","www")),
-                                ("ravi@sub.tenant.github.io", ("ravi","tenant"))]:
+                                ("mukunda@a.b.ck", None), ("mukunda@sub.www.ck", ("mukunda","www")),
+                                ("mukunda@sub.tenant.github.io", ("mukunda","tenant"))]:
             parts, _ = preprocess(email)
             self.assertEqual((parts.username, parts.domain) if parts else None, expected)
         self.assertEqual(preprocess("hello@private.icloud.com")[1], "recognized_private_relay")
@@ -26,13 +26,13 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(preprocess("ನಮಸ್ಕಾರ@gmail.com")[1], "unsupported_address_form")
 
     def test_contributions_and_coverage(self):
-        r = predict("ravi@gmail.com", self.model, explain=True)
-        self.assertEqual(list(grams("ravi")), ["ra","av","vi","rav","avi","ravi"])
-        self.assertEqual(r["coverage"]["user"]["known"], 3)
-        self.assertEqual(r["coverage"]["user"]["total"], 6)
+        r = predict("mukunda@gmail.com", self.model, explain=True)
+        self.assertEqual(list(grams("mukunda")), ["mu","uk","ku","un","nd","da","muk","uku","kun","und","nda","muku","ukun","kund","unda"])
+        self.assertEqual(r["coverage"]["user"]["known"], 5)
+        self.assertEqual(r["coverage"]["user"]["total"], 15)
         self.assertAlmostEqual(r["math"]["intercept"] + sum(t["points"] for t in r["contributions"]),
                                r["math"]["margin"], places=12)
-        self.assertAlmostEqual(r["score"], .385235, places=5)
+        self.assertAlmostEqual(r["score"], .412573, places=5)
 
     def test_threshold_does_not_change_score(self):
         r = predict("qzxv8801@gmail.com", self.model)
@@ -48,24 +48,24 @@ class DetectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             f, o = Path(tmp)/"flagged.txt", Path(tmp)/"ordinary.txt"
             f.write_text("qzxv88@gmail.com\n")
-            o.write_text("RAVI@mail.example.co.in\nravi@example.com\n")
+            o.write_text("MUKUNDA@mail.example.co.in\nmukunda@example.com\n")
             rows, stats = read_lists(f, o)
             self.assertEqual(len(rows), 2)
             self.assertEqual(stats["ordinary"]["duplicate_lines"], 1)
-            f.write_text("ravi@example.net\n")
+            f.write_text("mukunda@example.net\n")
             with self.assertRaisesRegex(ValueError, "contradictory labels"):
                 read_lists(f, o)
 
     def test_equal_scores_and_no_candidate(self):
         self.assertEqual(choose_threshold([(1,.8),(0,.7),(1,.7),(0,None)], 0), .8)
         self.assertIsNone(choose_threshold([(0,.8),(1,.8)], 0))
-        self.assertEqual(predict("ravi@gmail.com", dict(self.model, threshold=None))["decision"], "score_only")
+        self.assertEqual(predict("mukunda@gmail.com", dict(self.model, threshold=None))["decision"], "score_only")
 
     def test_holdout_and_batch_include_unknowns(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d/"flagged.txt").write_text("qzxv8801@gmail.com\nbroken@@mail.com\n")
-            (d/"ordinary.txt").write_text("ravi@gmail.com\n")
+            (d/"ordinary.txt").write_text("mukunda@gmail.com\n")
             m = evaluate(d/"flagged.txt", d/"ordinary.txt", self.model)["results"]
             self.assertEqual((m["true_flags"],m["missed_flags"],m["abstained"]), (1,1,1))
             batch(d/"flagged.txt", d/"out.jsonl", self.model, None)

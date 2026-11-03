@@ -3,37 +3,37 @@
     "decision": "looks_ordinary",
     "email": "anu.rao27@gmail.com",
     "reason": null,
-    "score": 0.37112742994168774
+    "score": 0.36848324385386877
   },
   {
     "decision": "looks_gibberish",
     "email": "qzxv8801@gmail.com",
     "reason": null,
-    "score": 0.7487568557003745
+    "score": 0.7768962433308935
   },
   {
     "decision": "looks_ordinary",
-    "email": "ravi@gmail.com",
+    "email": "mukunda@gmail.com",
     "reason": null,
-    "score": 0.38523498257765465
+    "score": 0.41257314573344556
   },
   {
     "decision": "looks_gibberish",
-    "email": "ravi@qzxvpk.com",
+    "email": "mukunda@qzxvpk.com",
     "reason": null,
-    "score": 0.7738019770473841
+    "score": 0.7191201054585461
   },
   {
     "decision": "looks_ordinary",
-    "email": "RAVI@GMAIL.COM",
+    "email": "MUKUNDA@GMAIL.COM",
     "reason": null,
-    "score": 0.38523498257765465
+    "score": 0.41257314573344556
   },
   {
     "decision": "looks_ordinary",
     "email": "rohan+travel@mail.pinepost.co.in",
     "reason": null,
-    "score": 0.22277154299217208
+    "score": 0.22773871184202688
   },
   {
     "decision": "unsure",

@@ -12,8 +12,8 @@ from engine import FORMAT, PREPROCESSOR, decide, feature_terms, predict, preproc
 
 
 CLASSES = ("ordinary", "flagged")
-PROBES = ("anu.rao27@gmail.com", "qzxv8801@gmail.com", "ravi@gmail.com",
-          "ravi@qzxvpk.com", "RAVI@GMAIL.COM", "rohan+travel@mail.pinepost.co.in",
+PROBES = ("anu.rao27@gmail.com", "qzxv8801@gmail.com", "mukunda@gmail.com",
+          "mukunda@qzxvpk.com", "MUKUNDA@GMAIL.COM", "rohan+travel@mail.pinepost.co.in",
           "x@gmail.com", "||||||||@gmail.com", "abc@privaterelay.appleid.com", "broken@@example.com")
 
 
@@ -147,20 +147,29 @@ def golden_cases(model, fitted):
     return cases
 
 
-def train(flagged, ordinary, out, name=None, *, min_df=2, min_coverage=.20, max_fpr=.05):
+def train(flagged, ordinary, out, name=None, *, min_df=2, min_coverage=.20, max_fpr=.05, progress=None):
+    def stage(message):
+        if progress is not None:
+            progress(message)
+    stage('Loading training software')
     import sklearn
     out = Path(out)
     if out.exists():
         raise ValueError("output already exists; choose a new model directory")
     if min_df < 1 or not 0 <= min_coverage <= 1 or not 0 <= max_fpr <= 1:
         raise ValueError("min-df must be positive; coverage and false-flag budget must be in [0,1]")
+    stage('Preparing and checking labeled data')
     rows, ingestion = read_lists(flagged, ordinary)
+    stage('Splitting independent username groups')
     split = split_rows(rows)
+    stage('Fitting vocabulary and model weights')
     fitted, terms, intercept = fit(split["train"], min_df)
     model = {"format": FORMAT, "preprocessor": PREPROCESSOR, "name": name or out.name, "intercept": intercept,
              "min_coverage": min_coverage, "threshold": None, "terms": terms}
+    stage('Choosing a cutoff on validation data')
     validation = exported_scores(split["validation"], model, fitted)
     model["threshold"] = choose_threshold(validation, max_fpr)
+    stage('Measuring the frozen model on test data')
     test = exported_scores(split["test"], model, fitted)
     report = {"name": model["name"], "scikit_learn_version": sklearn.__version__, "seed": 43,
               "ingestion": ingestion, "split_counts": {n: len(v) for n, v in split.items()},
@@ -168,6 +177,7 @@ def train(flagged, ordinary, out, name=None, *, min_df=2, min_coverage=.20, max_
               "feature_count": len(terms), "min_df": min_df, "min_coverage": min_coverage,
               "validation_max_ordinary_false_flag_rate": max_fpr, "chosen_threshold": model["threshold"],
               "validation": metrics(validation, model["threshold"]), "test": metrics(test, model["threshold"])}
+    stage('Saving model and reports')
     out.parent.mkdir(parents=True, exist_ok=True)
     temp = Path(tempfile.mkdtemp(dir=out.parent))
     try:
@@ -182,7 +192,7 @@ def train(flagged, ordinary, out, name=None, *, min_df=2, min_coverage=.20, max_
             "threshold": model["threshold"], "test": report["test"]}
 
 
-def evaluate(flagged, ordinary, model, threshold=None):
+def evaluate(flagged, ordinary, model, threshold=None, *, include_scores=False, include_breakdowns=False):
     rows, counts = read_lists(flagged, ordinary)
     cutoff = model["threshold"] if threshold is None else threshold
     if cutoff is not None and not 0 <= cutoff <= 1:
@@ -190,5 +200,28 @@ def evaluate(flagged, ordinary, model, threshold=None):
     extra = tuple(sum(counts[c]["excluded_unique"].values()) for c in CLASSES)
     if not rows and not sum(extra):
         raise ValueError("both input files are empty")
-    return {"model": model["name"], "threshold": cutoff, "ingestion": counts,
-            "results": metrics(exported_scores(rows, model), cutoff, extra)}
+    pairs = exported_scores(rows, model)
+    result = {"model": model["name"], "threshold": cutoff, "ingestion": counts,
+              "results": metrics(pairs, cutoff, extra)}
+    if include_scores:
+        grouped = {}
+        for label, score in pairs:
+            if score is not None:
+                counts_at_score = grouped.setdefault(score, [0, 0])
+                counts_at_score[label] += 1
+        result["score_groups"] = [[score, *counts] for score, counts in sorted(grouped.items())]
+    if include_breakdowns:
+        domains = {}
+        buckets = {name: [] for name in ("0–<25%", "25–<50%", "50–<75%", "75–100%")}
+        for (parts, label), (_, score) in zip(rows, pairs, strict=True):
+            domains.setdefault(parts.domain, []).append((label, score))
+            fraction = score_parts(parts, model)["coverage"]["user"]["fraction"]
+            bucket = min(int(fraction * 4), 3)
+            buckets[tuple(buckets)[bucket]].append((label, score))
+        result["breakdowns"] = {
+            "domain_labels": [{"label": domain, **metrics(values, cutoff)}
+                              for domain, values in sorted(domains.items(), key=lambda item: (-len(item[1]), item[0]))],
+            "username_coverage": [{"label": name, **metrics(values, cutoff)} for name, values in buckets.items()],
+            "excluded_before_grouping": sum(extra),
+        }
+    return result
