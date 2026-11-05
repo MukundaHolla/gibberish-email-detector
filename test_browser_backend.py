@@ -47,6 +47,46 @@ class BrowserBackendTests(unittest.TestCase):
         self.assertIn('score_groups', report)
         self.assertIn('breakdowns', report)
 
+    def test_two_models_train_and_survive_export_import(self):
+        flagged_domains = ''.join(f'bad{i}.example{i}.com\n' for i in range(20))
+        ordinary_domains = ''.join(f'good{i}.sample{i}.org\n' for i in range(20))
+        data = {'flagged': {'name': 'flagged.txt', 'content': (ROOT / 'examples/flagged.txt').read_text()},
+                'ordinary': {'name': 'ordinary.txt', 'content': (ROOT / 'examples/ordinary.txt').read_text()},
+                'domain_files': {'flagged': {'name': 'flagged.txt', 'content': flagged_domains},
+                                 'ordinary': {'name': 'ordinary.txt', 'content': ordinary_domains}},
+                'name': 'two model test'}
+        trained = browser.handle('train', data, lambda _: None)
+        artifacts = browser.handle('artifacts', {'model': trained['id']}, lambda _: None)
+        model = artifacts['model.json']
+        self.assertNotIn('flagged_domains', model)
+        self.assertIn('domain_model', model)
+        self.assertEqual(artifacts['report.json']['domain_model']['input_counts'], {'ordinary': 20, 'flagged': 20})
+        self.assertNotIn('example0.com', json.dumps(model))
+        imported = browser.handle('import', {'content': json.dumps(model)}, lambda _: None)
+        answer = browser.handle('score', {'model': imported['id'], 'email': 'name@sub.example0.com'}, lambda _: None)
+        self.assertEqual(answer['domain_result']['domain'], 'example0.com')
+        self.assertIn(answer['decision'], ('looks_gibberish', 'looks_ordinary', 'unsure'))
+        self.assertIn('email_decision', answer)
+        for case in artifacts['golden.json']:
+            actual = browser.handle('score', {'model': imported['id'], 'email': case['email']}, lambda _: None)
+            self.assertEqual(actual['decision'], case['decision'])
+            self.assertEqual(actual['reason'], case['reason'])
+            if case['score'] is not None:
+                self.assertAlmostEqual(actual['score'], case['score'], places=12)
+
+    def test_domain_training_requires_both_files(self):
+        with self.assertRaisesRegex(ValueError, 'both flagged and ordinary domain files'):
+            browser.handle('train', {'domain_files': {'flagged': {'name': 'a.txt', 'content': 'example.com'}}}, lambda _: None)
+
+    def test_large_domain_list_import_and_lookup(self):
+        model = json.loads((ROOT / 'demo/model.json').read_text())
+        model['flagged_domains'] = [f'domain{i}.example.com' for i in range(22000)]
+        model['include_subdomains'] = True
+        imported = browser.handle('import', {'content': json.dumps(model)}, lambda _: None)
+        answer = browser.handle('score', {'model': imported['id'], 'email': 'name@sub.domain21999.example.com'}, lambda _: None)
+        self.assertEqual(answer['decision'], 'flagged_domain')
+        self.assertEqual(answer['matched_domain'], 'domain21999.example.com')
+
 
 if __name__ == '__main__':
     unittest.main()

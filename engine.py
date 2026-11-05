@@ -24,6 +24,10 @@ class Parts:
     domain: str
 
 
+class Model(dict):
+    """JSON-compatible model mapping with a cached domain lookup."""
+
+
 @cache
 def suffix_rules():
     # The leading byte in the pinned dataset identifies the ICANN or private section.
@@ -32,19 +36,24 @@ def suffix_rules():
                          for row in archive.read(name).splitlines() if row)
 
 
-def domain_label(labels):
+def registrable_index(labels):
     rules = suffix_rules()
     longest = 0
     for index in range(len(labels)):
         tail = ".".join(labels[index:])
         if "!" + tail in rules:
-            return labels[index]
+            return index
         wildcard = index + 1 < len(labels) and "*." + ".".join(labels[index + 1:]) in rules
         if tail in rules or wildcard:
             longest = max(longest, len(labels) - index)
     if not longest or longest == len(labels):
         return None
-    return labels[-longest - 1]
+    return len(labels) - longest - 1
+
+
+def domain_label(labels):
+    index = registrable_index(labels)
+    return labels[index] if index is not None else None
 
 
 def preprocess(address):
@@ -107,6 +116,35 @@ def load_model(path=None):
         if (field not in {"user", "domain"} or not 2 <= len(term) <= 4 or not isinstance(pair, list)
                 or len(pair) != 2 or not all(finite(x) for x in pair) or pair[0] <= 0):
             raise ValueError("invalid feature in model.json")
+    domain_model = model.get('domain_model')
+    if domain_model is not None:
+        if model.get('flagged_domains'):
+            raise ValueError('model cannot contain both a domain model and a legacy domain list')
+        if (not isinstance(domain_model, dict) or domain_model.get('format') != 'registrable-domain-char-tfidf-logistic-v1'
+                or not isinstance(domain_model.get('terms'), dict) or not domain_model['terms']
+                or not finite(domain_model.get('intercept')) or not finite(domain_model.get('min_coverage'))
+                or not 0 <= domain_model['min_coverage'] <= 1 or 'threshold' not in domain_model):
+            raise ValueError('invalid domain model in model.json')
+        cutoff = domain_model['threshold']
+        if cutoff is not None and (not finite(cutoff) or not 0 <= cutoff <= 1):
+            raise ValueError('invalid domain model threshold')
+        for term, pair in domain_model['terms'].items():
+            if (not isinstance(term, str) or not 2 <= len(term) <= 4 or not isinstance(pair, list)
+                    or len(pair) != 2 or not all(finite(x) for x in pair) or pair[0] <= 0):
+                raise ValueError('invalid domain model feature')
+    domains = model.get("flagged_domains", [])
+    if not isinstance(domains, list) or not all(isinstance(d, str) for d in domains):
+        raise ValueError("invalid flagged domains in model.json")
+    if type(model.get("include_subdomains", True)) is not bool:
+        raise ValueError("invalid domain matching setting in model.json")
+    from domain_rules import normalize_domain
+    try:
+        if any(normalize_domain(d) != d for d in domains):
+            raise ValueError("invalid flagged domains in model.json")
+    except ValueError:
+        raise ValueError("invalid flagged domains in model.json") from None
+    model = Model(model)
+    model.domain_lookup = frozenset(domains)
     return model
 
 
@@ -173,6 +211,16 @@ def decide(score, threshold):
 
 
 def predict(address, model, *, threshold=None, explain=False):
+    domains = getattr(model, 'domain_lookup', None)
+    if domains is None:
+        domains = frozenset(model.get('flagged_domains', ()))
+    if domains:
+        from domain_rules import match_domain
+        matched = match_domain(address, domains, model.get('include_subdomains', True))
+        if matched:
+            return {'model': model['name'], 'decision': 'flagged_domain', 'score': None,
+                    'threshold': None, 'coverage': None, 'reason': 'domain_list_match',
+                    'matched_domain': matched, 'decision_source': 'domain_rule'}
     cutoff = model["threshold"] if threshold is None else threshold
     if cutoff is not None and not 0 <= cutoff <= 1:
         raise ValueError("threshold must be in [0, 1]")
@@ -182,4 +230,26 @@ def predict(address, model, *, threshold=None, explain=False):
     decision = decide(evidence["score"], cutoff)
     if decision == "score_only":
         evidence["reason"] = "no_usable_validation_threshold"
-    return {"model": model["name"], "decision": decision, "threshold": cutoff, **evidence}
+    result = {"model": model["name"], "decision": decision, "threshold": cutoff, **evidence}
+    if model.get('domain_model'):
+        from domain_ml import score_domain
+        domain = score_domain(address, model['domain_model'])
+        email_decision = decision
+        domain_decision = domain['decision']
+        if 'looks_gibberish' in (email_decision, domain_decision):
+            final = 'looks_gibberish'
+        elif email_decision == 'looks_ordinary' and domain_decision == 'looks_ordinary':
+            final = 'looks_ordinary'
+        else:
+            final = 'unsure'
+        email_reason = result['reason']
+        if final == 'looks_gibberish':
+            flagged_by = [name for name, value in (('email', email_decision), ('domain', domain_decision)) if value == 'looks_gibberish']
+            final_reason = '_and_'.join(flagged_by) + '_model_flagged'
+        elif final == 'unsure':
+            final_reason = 'one_or_both_models_unsure'
+        else:
+            final_reason = None
+        result.update({'decision': final, 'reason': final_reason, 'email_decision': email_decision,
+                       'email_reason': email_reason, 'domain_result': domain, 'decision_source': 'combined_models'})
+    return result

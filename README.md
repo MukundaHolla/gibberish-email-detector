@@ -1,6 +1,6 @@
 # Standalone gibberish email detector
 
-Give the trainer two labeled TXT or CSV files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels. The saved model can score a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
+Give the trainer two labeled TXT or CSV files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels. You can optionally train a second model on flagged and ordinary domains. The saved model can analyze a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
 
 If machine learning is new to you, start with [How it works](HOW_IT_WORKS.md). It follows one email all the way from characters to a numeric score and includes training and prediction flow diagrams.
 
@@ -35,7 +35,7 @@ Use the sidebar to open **Home**, **Train a model**, **Test an email**, **Import
 
 ### Explore the learning guide
 
-Open **How it works** for a plain-English glossary and interactive training and detection walkthroughs. The training walkthrough shows how labeled examples become a model; the detection walkthrough follows the demo score for `mukunda@gmail.com`. The results lesson uses six fictional addresses to explain precision, recall, false alerts, and scored coverage. The guide distinguishes fragment coverage and scored coverage from code coverage.
+Open **How it works** for a plain-English glossary and interactive training and detection walkthroughs. The training walkthrough shows how labeled examples become an email model; the two-model section explains domain training and combined decisions. The detection walkthrough follows the bundled email-only demo score for `mukunda@gmail.com`. The results lesson uses six fictional addresses to explain precision, recall, false alerts, and scored coverage. The guide distinguishes fragment coverage and scored coverage from code coverage.
 
 ![The interactive How it works guide.](docs/screenshots/07-guide.jpg)
 
@@ -49,11 +49,24 @@ Create two UTF-8 files: **flagged** addresses reviewed for gibberish spelling an
 
 For a practice run, use the invented files [examples/flagged.txt](examples/flagged.txt) and [examples/ordinary.txt](examples/ordinary.txt).
 
+Optionally upload **both flagged and ordinary domain files** to train a second machine-learning model alongside the email model. Use TXT with one full domain per line or a CSV with a `domain` column. For example, `mail.example.com` is represented as its registrable domain, `example.com`; conflicting labels for the same registrable domain must be resolved.
+
+The domain model learns character fragments and weights; the full uploaded domain lists are not stored as an exact-match list. A training domain is not guaranteed to be flagged later. Learned fragments can still reveal parts of the data, so keep model files private when appropriate. The false-alert budget applies separately to each model, so the combined false-alert rate can be higher. Both models run when an address is tested: either can flag; if neither flags and one is unsure or has no cutoff, the combined result is unsure; both must say ordinary for an ordinary result. Each domain class needs at least five independent registrable domains, and both classes must appear in each split; use many more for meaningful evaluation. The training report measures the two models separately; evaluate their combined behavior on independent email addresses and domains not used to train either model. Older models with a saved direct-domain list keep their legacy behavior when imported.
+
+### How the two models work together
+
+1. The **email model** learns character fragments from the username and registrable domain label in flagged and ordinary email addresses. The optional **domain model** learns its own fragments from flagged and ordinary registrable domains, including their suffixes. The email model already considers a domain label; the second model learns separately from the domain-specific labels.
+2. Each model splits its own labeled data into training, validation, and test sets. Training fits TF-IDF and logistic-regression weights; validation chooses that model’s cutoff; the held-out test measures that model. Related subdomains are normalized to the same registrable domain before the domain split.
+3. For an address such as `name@mail.example.co.in`, the domain model analyzes `example.co.in`. It predicts from learned spelling patterns rather than checking an exact list. The email model and domain model each provide their own decision, score, coverage, and cutoff when available.
+4. The final decision is **flagged if either model flags**, **ordinary if both say ordinary**, and **unsure otherwise**—including when one is unsure or has no usable cutoff and neither flags. Email-only models, including the bundled demo, continue to use the email model alone.
+
+Each model’s false-alert budget is selected independently. It does not guarantee the combined system’s false-alert rate. Evaluate the whole system using independent labeled emails whose registrable domains were also kept out of both training datasets. A score is a pattern-based model output, not proof of fraud or mailbox existence.
+
 ### 2. Review the data and train
 
 ![The browser training page with separate file uploads for flagged and ordinary examples.](docs/screenshots/01-train.jpg)
 
-1. Under **Train a model**, use **Upload TXT or CSV** to choose each file. The filename appears beside the button. For a CSV with a nonstandard email-column name, expand **CSV column name (optional)** and enter the exact header.
+1. Under **Train a model**, use **Upload TXT or CSV** to choose each email file. To also train the domain model, upload both flagged and ordinary domain files under **Train a domain model**. For CSV files with nonstandard headers, expand the corresponding optional column-name setting and enter the exact header.
 2. Click **Preview data** to see duplicates, contradictory labels, and unsupported addresses. Select rows and click **Exclude selected & review again** to leave them out of this run; your original files are not changed. Replacing a file or changing a CSV column resets these exclusions.
 3. Optionally enter a model name and expand **Training settings**. The defaults are a minimum fragment frequency of 2, minimum component coverage of 20%, and validation false-alert budget of 5%. The budget is a target measured on the validation data, not a future guarantee.
 4. Click **Train model**. The status shows the current stage, and only one UI training run can run at a time. In the browser edition, keep the page open until training finishes and download the model before leaving. In the local edition, refreshing loses the progress view but training can continue while the server runs; stopping the server interrupts it.
@@ -65,7 +78,7 @@ For a practice run, use the invented files [examples/flagged.txt](examples/flagg
 
 1. Under **Test an email**, select the demo or one of your saved models.
 2. Enter a complete address or select one of the example buttons, then click **Analyze email**.
-3. Follow the result from the username/domain split through known and unknown fragments, coverage, the score calculation, and the saved threshold. Expand **See the strongest individual fragment effects** for more detail. Positive effects push toward flagged; negative effects push toward ordinary. Low coverage can lead to **unsure** without a score.
+3. If the selected model includes a domain model, review both model decisions and their combined result first. Then follow the email result through the username/domain split, fragments, coverage, score calculation, and cutoff. Expand the fragment details for either model to see its influences. Low coverage can lead to **unsure**; a domain model score-only result also makes the combined result unsure unless the email model flags.
 
 `looks_gibberish` and `looks_ordinary` are model decisions, not proof of fraud or deliverability. `unsure` means the model declined to score; inspect the reason. `score_only` means it could calculate a score but has no saved cutoff.
 
@@ -91,10 +104,10 @@ To build a reviewed dataset, mark binary decisions **Correct**, **Incorrect**, o
 
 ![The holdout evaluation form with separate file uploads.](docs/screenshots/05-evaluate.jpg)
 
-1. Set aside separate, labeled flagged and ordinary files that were not used to train or select the model, preferably collected later and from an independent source.
+1. Set aside separate, labeled flagged and ordinary email files that were not used to train or select either model, preferably collected later and from an independent source. For the combined system, their registrable domains should also be independent of the domain-training data.
 2. Under **Evaluate a model**, select the model, choose the holdout files, and click **Evaluate model**.
 3. Inspect coverage, recall, precision, false-alert rate, and the input review. Out-of-scope positives and other unscored positives count as missed flags. Group breakdowns use the saved threshold; small groups can give misleading rates, and a registrable domain label is not necessarily a unique provider.
-4. Move **Explore a cutoff** to see hypothetical alert and miss counts. The slider does not modify the saved model or the group breakdowns. If you use this dataset to choose a cutoff, measure the chosen cutoff on a different independent holdout before relying on the result.
+4. Move **Explore a cutoff** to see hypothetical alert and miss counts. For a two-model system it changes the email cutoff only; the domain cutoff remains fixed. The slider does not modify the saved model or the group breakdowns. If you use this dataset to choose a cutoff, measure the chosen cutoff on a different independent holdout before relying on the result.
 
 ![Example evaluation results using the invented demo training files, which are not an independent holdout.](docs/screenshots/06-evaluation-results.jpg)
 
@@ -112,7 +125,7 @@ Open **Model history** from the footer and select **Use model** to select a save
 
 ## Command-line usage
 
-The CLI supports the same model format and remains useful for scripting. Scoring uses only the standard library; training requires the environment installed above. The CLI's list commands take UTF-8 TXT files with one complete address per line.
+The CLI supports the same saved model format and remains useful for scripting. Train both models using the interface; the CLI training command currently trains only the email model, while CLI scoring and evaluation can use a combined model. Scoring uses only the standard library; training requires the environment installed above. The CLI's list commands take UTF-8 TXT files with one complete address per line.
 
 ### Try the demo from Terminal
 
@@ -202,7 +215,8 @@ print(answer["score"], answer["decision"])
 |---|---|
 | `detector.py` | The entry point. Implements `score`, `explain`, `batch`, `train`, `evaluate`, and `self-test`. |
 | `engine.py` | Shared spelling preparation, feature counting, coverage checks, scoring arithmetic, and label decision. |
-| `training.py` | Reads both labeled lists, separates training/validation/test groups, calls scikit-learn, chooses a cutoff, checks the export, and writes results. |
+| `training.py` | Splits email data, trains the email model, chooses a cutoff, writes reports, and evaluates saved models. |
+| `domain_ml.py`, `domain_rules.py` | Parse domain files and train or score the separate domain model; `domain_rules.py` also supports legacy direct-list models. |
 | `local_ui.py`, `ui/` | The local web server and interface for training, testing, review, evaluation, and model history. |
 | `requirements.txt` | Pins the direct training dependency to scikit-learn 1.8.0. |
 | `assets/public_suffix_list.dat` | An offline domain-suffix reference used to identify the registrable label, including multi-part suffixes such as `co.in`. |
@@ -219,9 +233,9 @@ print(answer["score"], answer["decision"])
 
 ## Scope and troubleshooting
 
-- `unsure` means the detector declined to assign a score. Inspect `reason` and the per-field coverage. Reasons include unsupported input, short components, a recognized private relay, and too few known fragments. A `null` score expresses missing evidence.
-- `score_only` means the model could calculate a score but no cutoff caught a validation positive within the selected false-alert budget. Inspect `report.json` and collect better labeled examples. You can supply an explicit `--threshold` for experiments.
-- The text model handles supported ASCII addresses. It uses the username and the registrable domain label. Quoted forms, internationalized addresses, unknown suffixes, and certain recognized relay domains receive an explicit abstention. It performs no mailbox queries. It cannot establish deliverability or ownership.
+- `unsure` means the system cannot make a final decision. With one email model, it may have no score. With two models, one may have a score even when the combined decision is unsure. Inspect each model’s decision, reason, and fragment coverage.
+- `score_only` in an email-only model means it calculated a score but has no usable cutoff. In a two-model result, a score-only component makes the final result unsure unless the other model flags. An explicit CLI `--threshold` changes the email cutoff only.
+- The email model handles supported ASCII addresses and uses the username and registrable domain label. Quoted forms, internationalized addresses, unknown suffixes, and certain relay domains can make that model abstain. A separate domain model may still produce a decision when its input is supported. Neither model checks mailbox existence or ownership.
 - The code refuses contradictory labels for the same model input and identifies lines to review. It needs at least five independent eligible username groups per class for its five-fold split, both classes in all three partitions, and a nonempty training vocabulary. These are mechanical minimums. Use many more reviewed examples for any real performance estimate.
 - If tiny practice data produces an empty vocabulary, `--min-df 1` retains fragments seen in just one training address. The default is two. For an early learning exercise, the bundled examples give an immediate working reference.
 - Training reads labeled examples into memory. Batch inference streams a line at a time. Run real customer data in an approved environment. Keep real lists, result files, and private trained vocabularies out of a public release.
@@ -247,7 +261,7 @@ npx wrangler deploy
 The browser edition checks the demo model against its saved reference cases at startup. To run the Python adapter, detector, and local-interface tests plus the JavaScript review tests, activate your environment and run:
 
 ```bash
-python -m unittest -v test_browser_backend test_local_ui test_detector
+python -m unittest -v test_domain_rules test_browser_backend test_local_ui test_detector
 node --test test_review.js
 ```
 

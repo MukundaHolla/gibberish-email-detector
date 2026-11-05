@@ -7,6 +7,8 @@ test('correct and incorrect map binary decisions to reviewer labels', () => {
   assert.equal(labelForReview('looks_gibberish', 'incorrect'), 'ordinary');
   assert.equal(labelForReview('looks_ordinary', 'correct'), 'ordinary');
   assert.equal(labelForReview('looks_ordinary', 'incorrect'), 'flagged');
+  assert.equal(labelForReview('flagged_domain', 'correct'), 'flagged');
+  assert.equal(labelForReview('flagged_domain', 'incorrect'), 'ordinary');
   assert.equal(labelForReview('unsure', 'incorrect'), null);
   assert.equal(labelForReview('unsure', 'flagged'), 'flagged');
   assert.equal(labelForReview('score_only', 'uncertain'), null);

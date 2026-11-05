@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from engine import ROOT, load_model, predict, preprocess
+from domain_rules import parse_domain_file
 from training import evaluate, train
 
 RUNS = ROOT / 'runs'
@@ -36,6 +37,10 @@ def training_options(data):
 
 def run_training(data, progress=None):
     options = training_options(data)
+    domain_files = data.get('domain_files') or {}
+    if bool(domain_files.get('flagged')) != bool(domain_files.get('ordinary')):
+        raise ValueError('Provide both flagged and ordinary domain files, or leave both empty.')
+    domains = {k: parse_domain_file(domain_files[k])['domains'] for k in ('flagged', 'ordinary')} if domain_files.get('flagged') else None
     excluded = data.get('exclude', {})
     flagged, ordinary = ([email for _, email in selected_rows(data[k], excluded.get(k))] for k in ('flagged', 'ordinary'))
     if not flagged or not ordinary:
@@ -47,7 +52,7 @@ def run_training(data, progress=None):
         f.write_text('\n'.join(flagged), encoding='utf-8')
         o.write_text('\n'.join(ordinary), encoding='utf-8')
         result = train(f, o, RUNS / identifier, name=data.get('name', '').strip()[:80] or identifier,
-                       progress=progress, **options)
+                       progress=progress, domain_data=domains, **options)
     report = json.loads((RUNS / identifier / 'report.json').read_text())
     return {'id': identifier, 'result': result, 'report': report}
 

@@ -15,7 +15,7 @@
     },
     {
       name:'Fragments', kicker:'STEP 4 · MAKE SMALL PIECES', title:'A fragment is just neighboring letters.',
-      body:`<p>This model looks at small pieces instead of treating the entire address as one word. The app slides a small window across each part of an address, making overlapping pieces of <b>2, 3 and 4 characters</b>. These are also called <b>n-grams</b>.</p><div class="fragment-board"><div class="fragment-word"><span>m</span><span>u</span><span>k</span><span>u</span><span>n</span><span>d</span><span>a</span></div><div><small>2 CHARACTERS</small><div class="fragment-row"><b>mu</b><b>uk</b><b>ku</b><b>un</b><b>nd</b><b>da</b></div></div><div><small>3 CHARACTERS</small><div class="fragment-row alt"><b>muk</b><b>uku</b><b>kun</b><b>und</b><b>nda</b></div></div><div><small>4 CHARACTERS</small><div class="fragment-row subtle"><b>muku</b><b>ukun</b><b>kund</b><b>unda</b></div></div></div><p>In our 7 training addresses, imagine the username piece <code>ma</code> appears in both <code>maya</code> and <code>maya+shop</code>. With minimum fragment frequency set to <b>2</b>, it is kept. A piece found in only one training address is left out.</p><div class="story-note">The kept pieces form the <b>vocabulary</b>. Username and domain pieces are tracked separately. Validation and test addresses do not decide which pieces enter the vocabulary.</div>`
+      body:`<p>This model looks at small pieces instead of treating the entire address as one word. The app slides a small window across each part of an address, making overlapping pieces of <b>2, 3 and 4 characters</b>. These are also called <b>n-grams</b>.</p><div class="fragment-board"><div class="fragment-word"><span>m</span><span>u</span><span>k</span><span>u</span><span>n</span><span>d</span><span>a</span></div><div><small>2 CHARACTERS</small><div class="fragment-row"><b>mu</b><b>uk</b><b>ku</b><b>un</b><b>nd</b><b>da</b></div></div><div><small>3 CHARACTERS</small><div class="fragment-row alt"><b>muk</b><b>uku</b><b>kun</b><b>und</b><b>nda</b></div></div><div><small>4 CHARACTERS</small><div class="fragment-row subtle"><b>muku</b><b>ukun</b><b>kund</b><b>unda</b></div></div></div><p>In our 7 training addresses, imagine the username piece <code>ma</code> appears in both <code>maya</code> and <code>maya+shop</code>. With minimum fragment frequency set to <b>2</b>, it is kept. A piece found in only one training address is left out.</p><div class="story-note">The kept pieces form the <b>email model’s vocabulary</b>. Username and domain-label pieces are tracked separately. The optional domain model learns its own vocabulary from its own domain training split. Validation and test data do not decide the vocabulary.</div>`
     },
     {
       name:'Learn', kicker:'STEP 5 · FIT THE MODEL', title:'Watch a model take shape.',
@@ -117,6 +117,19 @@
   document.querySelectorAll('[data-count-step]').forEach(button=>button.onclick=()=>{stopCount();renderMetric(activeMetric,Number(button.dataset.countStep));});
   $('count-next').onclick=()=>{stopCount();renderMetric(activeMetric,(countStep+1)%3);};
   $('count-play').onclick=()=>{if(countTimer!==null){stopCount();return;} if(countStep===2)renderMetric(activeMetric,0); $('count-play').textContent='Ⅱ Pause'; countTimer=setInterval(()=>{if(document.hidden||document.querySelector('[data-view="learn"]').hidden)return; if(countStep>=2){stopCount();return;}renderMetric(activeMetric,countStep+1);if(countStep===2)stopCount();},6000);};
+  const combineExamples = {
+    email:{email:'Flagged',domain:'Ordinary',final:'Flagged',explanation:'The email model flagged the address. One flag is enough for the final result.'},
+    domain:{email:'Ordinary',domain:'Flagged',final:'Flagged',explanation:'The domain model flagged the domain. One flag is enough for the final result.'},
+    unsure:{email:'Ordinary',domain:'Unsure',final:'Unsure',explanation:'Neither model flagged, but the domain model could not make a decision. The app does not call the address ordinary.'},
+    ordinary:{email:'Ordinary',domain:'Ordinary',final:'Ordinary',explanation:'Both models said ordinary, so the final result is ordinary.'}
+  };
+  function renderCombine(key) {
+    const x=combineExamples[key];
+    $('combine-example').innerHTML=`<div><small>EMAIL MODEL SAYS</small><strong>${x.email}</strong></div><span aria-hidden="true">+</span><div><small>DOMAIN MODEL SAYS</small><strong>${x.domain}</strong></div><span aria-hidden="true">→</span><div class="dual-final"><small>FINAL ANSWER</small><strong>${x.final}</strong></div><p>${x.explanation} If a model can calculate a score but has no saved cutoff, it cannot provide a flagged-or-ordinary answer; without a flag from the other model, the final answer is unsure.</p>`;
+    document.querySelectorAll('[data-combine-example]').forEach(button=>{const active=button.dataset.combineExample===key;button.setAttribute('aria-pressed',String(active));button.classList.toggle('selected',active);});
+  }
+  document.querySelectorAll('[data-combine-example]').forEach(button=>button.addEventListener('click',()=>renderCombine(button.dataset.combineExample)));
+  renderCombine('email');
   document.querySelectorAll('[data-scroll]').forEach(button=>button.onclick=()=>document.getElementById(button.dataset.scroll).scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'}));
   renderMetric('precision');
 })();

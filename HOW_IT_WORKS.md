@@ -1,5 +1,7 @@
 # How an email address becomes a score
 
+This document follows the **email model** and the bundled email-only demo. The interface can also train an optional, separate domain model from flagged and ordinary domain files. It learns fragments of registrable domains such as `example.co.in`, with its own split, score, coverage, and cutoff. The models run together: either flag produces a final flag; both must say ordinary for an ordinary result; otherwise the final result is unsure. The supplied domain files are not stored as an exact-match list, although learned fragments may reveal parts of the data. See the [two-model explanation](README.md#how-the-two-models-work-together) and the interactive **How it works** page for the full workflow.
+
 ## Start with two functions
 
 Imagine writing `looks_generated(email)`. You could manually decide how much to penalize every sequence of letters. In this project you write a different program. You specify how to **describe** an address using numbers. You give a learning algorithm example addresses and the answers you want. The algorithm finds a set of weights for those numbers. That fitted scoring function is the **model**.

@@ -6,7 +6,7 @@ async function initialize() {
   if (runtime) return runtime;
   const py = await loadPyodide({indexURL:'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/'});
   py.FS.mkdirTree('/app/assets'); py.FS.mkdirTree('/app/demo');
-  for (const file of ['engine.py','training.py','local_ui.py','browser_backend.py','assets/public_suffix_list.dat','demo/model.json','demo/report.json','demo/golden.json']) {
+  for (const file of ['engine.py','domain_rules.py','domain_ml.py','training.py','local_ui.py','browser_backend.py','assets/public_suffix_list.dat','demo/model.json','demo/report.json','demo/golden.json']) {
     const response = await fetch('./' + file);
     if (!response.ok) throw new Error(`Could not load application asset: ${file}`);
     py.FS.writeFile('/app/' + file, new Uint8Array(await response.arrayBuffer()));

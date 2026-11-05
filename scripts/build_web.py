@@ -5,7 +5,7 @@ import shutil
 root = Path(__file__).resolve().parent.parent
 out = root / 'web-dist'
 out.mkdir(exist_ok=True)
-files = {'engine.py':'engine.py', 'training.py':'training.py', 'local_ui.py':'local_ui.py',
+files = {'engine.py':'engine.py', 'domain_rules.py':'domain_rules.py', 'domain_ml.py':'domain_ml.py', 'training.py':'training.py', 'local_ui.py':'local_ui.py',
          'assets/public_suffix_list.dat':'assets/public_suffix_list.dat',
          'assets/PUBLIC_SUFFIX_LICENSE.md':'assets/PUBLIC_SUFFIX_LICENSE.md',
          'demo/model.json':'demo/model.json', 'demo/report.json':'demo/report.json',
@@ -38,7 +38,7 @@ html = html.replace('<script src="/review.js"></script><script src="/app.js"></s
 html = html.replace('href="/style.css"', 'href="./style.css"')
 (out / 'index.html').write_text(html)
 app = (out / 'app.js').read_text()
-app = app.replace('Saved locally. Results below are from the held-out test split, including abstentions.', 'Available in this session. Download the model before leaving; results below are from the held-out test split, including abstentions.')
+app = app.replace('Saved locally. Email metrics below are from its held-out test split.', 'Available in this session. Download the model before leaving. Email metrics below are from its held-out test split.')
 app = app.replace(' · file modified ', ' · added to this session ')
 (out / 'app.js').write_text(app)
 with (out / 'style.css').open('a') as f:

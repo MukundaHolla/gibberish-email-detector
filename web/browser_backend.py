@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from engine import ROOT, load_model, predict
+from domain_rules import parse_domain_file
 from local_ui import parse_file, review_training, score_batch, selected_rows, training_options
 from training import evaluate, train
 
@@ -74,6 +75,10 @@ def handle(route, data, progress):
             return evaluate(f, o, model(), include_scores=True, include_breakdowns=True)
     if route == 'train':
         opts = training_options(data)
+        domain_files = data.get('domain_files') or {}
+        if bool(domain_files.get('flagged')) != bool(domain_files.get('ordinary')):
+            raise ValueError('Provide both flagged and ordinary domain files, or leave both empty.')
+        domains = {k: parse_domain_file(domain_files[k])['domains'] for k in ('flagged', 'ordinary')} if domain_files.get('flagged') else None
         excluded = data.get('exclude', {})
         flagged, ordinary = ([email for _, email in selected_rows(data[k], excluded.get(k))] for k in ('flagged', 'ordinary'))
         if not flagged or not ordinary:
@@ -84,7 +89,7 @@ def handle(route, data, progress):
             f, o, target = root / 'flagged.txt', root / 'ordinary.txt', root / key
             f.write_text('\n'.join(flagged), encoding='utf-8')
             o.write_text('\n'.join(ordinary), encoding='utf-8')
-            result = train(f, o, target, name=data.get('name', '').strip()[:80] or key, progress=progress, **opts)
+            result = train(f, o, target, name=data.get('name', '').strip()[:80] or key, progress=progress, domain_data=domains, **opts)
             artifacts = {name: json.loads((target / name).read_text()) for name in ('model.json', 'report.json', 'golden.json')}
             loaded = load_model(target)
         _models[key], _artifacts[key] = loaded, artifacts
