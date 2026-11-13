@@ -1,6 +1,6 @@
 # Standalone gibberish email detector
 
-Give the trainer two labeled TXT or CSV files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels. You can optionally train a second model on flagged and ordinary domains. The saved model can analyze a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
+Give the trainer two labeled TXT or CSV files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels, using character fragments and username measurements. You can optionally train a second model on flagged and ordinary domains. The saved model can analyze a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
 
 If machine learning is new to you, start with [How it works](HOW_IT_WORKS.md). It follows one email all the way from characters to a numeric score and includes training and prediction flow diagrams.
 
@@ -45,6 +45,7 @@ Create two UTF-8 files: **flagged** addresses reviewed for gibberish spelling an
 
 - **TXT:** Put one complete email address on each line, with no header. Blank lines are ignored.
 - **CSV:** Include a header row. A column named `email`, `email address`, or `email_address` is detected automatically. Otherwise, expand **CSV column name (optional)** and enter the exact column header, such as `contact_email`. This field is for a column name, not pasted addresses; it is unnecessary for TXT files.
+- **Optional names:** Include a `full_name` column alongside `email` in both labeled CSV files to train name similarity. Use the same column in holdout and bulk CSVs, and enter the name when testing one address. TXT files have no names. Missing names are marked unavailable, not treated as zero similarity. Names should be present across both labels to avoid teaching the model that missing names imply a label.
 - Keep independent holdout data aside before training. Use many reviewed examples; the code's minimum of five eligible username groups per class is only a mechanical requirement.
 
 For a practice run, use the invented files [examples/flagged.txt](examples/flagged.txt) and [examples/ordinary.txt](examples/ordinary.txt).
@@ -55,7 +56,7 @@ The domain model learns character fragments and weights; the full uploaded domai
 
 ### How the two models work together
 
-1. The **email model** learns character fragments from the username and registrable domain label in flagged and ordinary email addresses. The optional **domain model** learns its own fragments from flagged and ordinary registrable domains, including their suffixes. The email model already considers a domain label; the second model learns separately from the domain-specific labels.
+1. The **email model** learns character fragments from the username and registrable domain label, plus username length, letters and digits, special characters, vowels, consonants, hyphens, colons, digit runs, uppercase letters, ratios, and optional name similarity. Counts use the original username before `@`; ratios divide by username length. Supported addresses cannot contain colons, so that count is always zero. Name similarity compares normalized full-name and username strings and is not SEON’s proprietary calculation. The bundled demo and other older models use fragments only; train a new model to use measurements. The optional **domain model** learns its own fragments from flagged and ordinary registrable domains, including their suffixes. The email model already considers a domain label; the second model learns separately from the domain-specific labels.
 2. Each model splits its own labeled data into training, validation, and test sets. Training fits TF-IDF and logistic-regression weights; validation chooses that model’s cutoff; the held-out test measures that model. Related subdomains are normalized to the same registrable domain before the domain split.
 3. For an address such as `name@mail.example.co.in`, the domain model analyzes `example.co.in`. It predicts from learned spelling patterns rather than checking an exact list. The email model and domain model each provide their own decision, score, coverage, and cutoff when available.
 4. The final decision is **flagged if either model flags**, **ordinary if both say ordinary**, and **unsure otherwise**—including when one is unsure or has no usable cutoff and neither flags. Email-only models, including the bundled demo, continue to use the email model alone.
@@ -273,7 +274,7 @@ The browser trainer has no fixed training-file size or row-count limit in the ap
 
 ### Observed browser benchmark
 
-On November 3, 2026, a single session on an Apple M1 with 16 GB of memory trained on synthetic TXT files using the default settings. Each dataset contained equal numbers of flagged and ordinary addresses. The browser and peak memory usage were not recorded. These are approximate wall-clock observations, not repeatable performance guarantees:
+Before username measurements were added, on November 3, 2026, a single session on an Apple M1 with 16 GB of memory trained on synthetic TXT files using the default settings. Each dataset contained equal numbers of flagged and ordinary addresses. The browser and peak memory usage were not recorded. These are approximate wall-clock observations, not repeatable performance guarantees:
 
 | Total addresses | Flagged / ordinary | Observed completion time |
 | ---: | ---: | --- |

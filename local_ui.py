@@ -42,7 +42,7 @@ def run_training(data, progress=None):
         raise ValueError('Provide both flagged and ordinary domain files, or leave both empty.')
     domains = {k: parse_domain_file(domain_files[k])['domains'] for k in ('flagged', 'ordinary')} if domain_files.get('flagged') else None
     excluded = data.get('exclude', {})
-    flagged, ordinary = ([email for _, email in selected_rows(data[k], excluded.get(k))] for k in ('flagged', 'ordinary'))
+    flagged, ordinary = (training_lines(data[k], excluded.get(k)) for k in ('flagged', 'ordinary'))
     if not flagged or not ordinary:
         raise ValueError('Both files must contain email addresses.')
     RUNS.mkdir(exist_ok=True)
@@ -95,11 +95,11 @@ def parse_file(data):
     return [email for _, email in parse_rows(data)]
 
 
-def parse_rows(data):
+def parse_rows(data, *, with_names=False):
     name = data.get('name', '')
     content = data.get('content', '')
     if name.lower().endswith('.txt'):
-        return [(n, line.strip()) for n, line in enumerate(content.lstrip('\ufeff').splitlines(), 1) if line.strip()]
+        return [(n, line.strip(), '') if with_names else (n, line.strip()) for n, line in enumerate(content.lstrip('\ufeff').splitlines(), 1) if line.strip()]
     if not name.lower().endswith('.csv'):
         raise ValueError('Choose a .txt or .csv file.')
     reader = csv.DictReader(io.StringIO(content.lstrip('\ufeff'), newline=''))
@@ -113,20 +113,30 @@ def parse_rows(data):
         column = matches[0]
     if column not in reader.fieldnames:
         raise ValueError(f'{name}: column {column!r} was not found. Available columns: {", ".join(reader.fieldnames)}')
+    name_columns = [f for f in reader.fieldnames if f.strip().lower() in ('full_name', 'full name', 'fullname')]
+    if len(name_columns) > 1:
+        raise ValueError(f'{name}: use only one full_name column.')
     rows = []
     for row in reader:
         if row.get(column) and row[column].strip():
-            rows.append((reader.line_num, row[column].strip()))
+            full_name = (row.get(name_columns[0]) or '').strip() if name_columns else ''
+            rows.append((reader.line_num, row[column].strip(), full_name) if with_names else (reader.line_num, row[column].strip()))
     return rows
 
 
+def training_lines(data, excluded=None):
+    excluded = set(excluded or [])
+    return [json.dumps({'email': email, 'full_name': name}, ensure_ascii=False)
+            for line, email, name in parse_rows(data, with_names=True) if line not in excluded]
+
+
 def score_batch(data, model):
-    rows = parse_rows(data)
+    rows = parse_rows(data, with_names=True)
     if not rows:
         raise ValueError('The file does not contain any email addresses.')
     if len(rows) > 10000:
         raise ValueError('The interface supports up to 10,000 addresses per batch. Use the CLI for larger files.')
-    return [{'line': line, 'email': email, **predict(email, model)} for line, email in rows]
+    return [{'line': line, 'email': email, **predict(email, model, full_name=name)} for line, email, name in rows]
 
 
 def selected_rows(data, excluded=None):
@@ -259,7 +269,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == '/api/train/start':
                 self.respond(202, {'job': start_training(data)})
             elif path == '/api/evaluate':
-                flagged, ordinary = (parse_file(data[k]) for k in ('flagged', 'ordinary'))
+                flagged, ordinary = (training_lines(data[k]) for k in ('flagged', 'ordinary'))
                 if not flagged or not ordinary:
                     raise ValueError('Both holdout files must contain email addresses.')
                 with tempfile.TemporaryDirectory() as tmp:
@@ -272,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                 email = data.get('email', '').strip()
                 if not email:
                     raise ValueError('Enter an email address.')
-                result = predict(email, get_model(data.get('model', 'demo')), explain=True)
+                result = predict(email, get_model(data.get('model', 'demo')), explain=True, full_name=data.get('full_name', ''))
                 self.respond(200, result)
             elif path == '/api/batch':
                 result = score_batch(data['file'], get_model(data.get('model', 'demo')))

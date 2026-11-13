@@ -8,7 +8,7 @@ from pathlib import Path
 
 from engine import ROOT, load_model, predict
 from domain_rules import parse_domain_file
-from local_ui import parse_file, review_training, score_batch, selected_rows, training_options
+from local_ui import review_training, score_batch, training_lines, training_options
 from training import evaluate, train
 
 _models = {'demo': load_model(ROOT / 'demo')}
@@ -61,11 +61,11 @@ def handle(route, data, progress):
         email = data.get('email', '').strip()
         if not email:
             raise ValueError('Enter an email address.')
-        return predict(email, model(), explain=True)
+        return predict(email, model(), explain=True, full_name=data.get('full_name', ''))
     if route == 'batch':
         return {'results': score_batch(data['file'], model())}
     if route == 'evaluate':
-        flagged, ordinary = (parse_file(data[k]) for k in ('flagged', 'ordinary'))
+        flagged, ordinary = (training_lines(data[k]) for k in ('flagged', 'ordinary'))
         if not flagged or not ordinary:
             raise ValueError('Both holdout files must contain email addresses.')
         with tempfile.TemporaryDirectory() as tmp:
@@ -80,7 +80,7 @@ def handle(route, data, progress):
             raise ValueError('Provide both flagged and ordinary domain files, or leave both empty.')
         domains = {k: parse_domain_file(domain_files[k])['domains'] for k in ('flagged', 'ordinary')} if domain_files.get('flagged') else None
         excluded = data.get('exclude', {})
-        flagged, ordinary = ([email for _, email in selected_rows(data[k], excluded.get(k))] for k in ('flagged', 'ordinary'))
+        flagged, ordinary = (training_lines(data[k], excluded.get(k)) for k in ('flagged', 'ordinary'))
         if not flagged or not ordinary:
             raise ValueError('Both files must contain email addresses.')
         key = 'model-' + uuid.uuid4().hex[:12]

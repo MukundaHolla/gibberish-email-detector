@@ -1,7 +1,8 @@
 """Address preparation, feature extraction and inference. Standard library only."""
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from functools import cache
 import json
 import math
@@ -12,6 +13,7 @@ from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parent
 FORMAT = "whole-email-char-tfidf-logistic-v1"
+SIGNAL_FORMAT = "whole-email-char-tfidf-signals-logistic-v2"
 PREPROCESSOR = "bare-ascii-psl-823beb1-v1"
 LOCAL = re.compile(r"[A-Za-z0-9!#$%&'*+/=?^_\x60{|}~.-]+")
 DNS_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
@@ -22,6 +24,8 @@ RELAY_HOSTS = {"privaterelay.appleid.com", "private.icloud.com"}
 class Parts:
     username: str
     domain: str
+    original_username: str = field(default='', compare=False)
+    full_name: str = field(default='', compare=False)
 
 
 class Model(dict):
@@ -56,7 +60,7 @@ def domain_label(labels):
     return labels[index] if index is not None else None
 
 
-def preprocess(address):
+def preprocess(address, full_name=''):
     """Return (feature copy, None) or (None, scope reason); never modifies a mailbox."""
     raw = address.strip()
     if not raw:
@@ -81,7 +85,40 @@ def preprocess(address):
         return None, "no_recognized_registrable_domain"
     if len(local) < 3 or len(domain) < 3:
         return None, "component_too_short"
-    return Parts(local, domain), None
+    return Parts(local, domain, raw.split('@')[0], full_name or ''), None
+
+
+SIGNALS = ('alphanumeric', 'non_alphanumeric', 'vowels', 'consonants', 'hyphens',
+           'colons', 'numbers', 'numbers_in_a_row', 'capital_letters', 'length',
+           'vowel_ratio', 'consonant_ratio', 'non_alphanumeric_ratio',
+           'name_similarity', 'name_available')
+
+
+def address_signals(parts):
+    """Measurements of the original username; names are optional and never saved."""
+    raw = parts.original_username or parts.username
+    lower = raw.lower()
+    length = len(raw)
+    vowels = sum(c in 'aeiou' for c in lower)
+    consonants = sum('a' <= c <= 'z' and c not in 'aeiou' for c in lower)
+    non_alphanumeric = sum(not c.isalnum() for c in raw)
+    numbers_in_a_row = max((len(m.group()) for m in re.finditer(r'[0-9]+', raw)), default=0)
+    name = ''.join(c for c in parts.full_name.casefold() if c.isalnum())
+    user = ''.join(c for c in lower if c.isalnum())
+    similarity = SequenceMatcher(None, name, user, autojunk=False).ratio() if name else None
+    return {'alphanumeric': sum(c.isalnum() for c in raw), 'non_alphanumeric': non_alphanumeric,
+            'vowels': vowels, 'consonants': consonants, 'hyphens': raw.count('-'),
+            'colons': raw.count(':'), 'numbers': sum(c.isdigit() for c in raw),
+            'numbers_in_a_row': numbers_in_a_row, 'capital_letters': sum(c.isupper() for c in raw),
+            'length': length, 'vowel_ratio': vowels / length, 'consonant_ratio': consonants / length,
+            'non_alphanumeric_ratio': non_alphanumeric / length,
+            'name_similarity': similarity, 'name_available': int(bool(name))}
+
+
+def signal_vector(parts):
+    values = address_signals(parts)
+    # Counts are scaled to the allowed username length; ratios are already in [0, 1].
+    return [(values[k] or 0) / (64 if i < 10 else 1) for i, k in enumerate(SIGNALS)]
 
 
 def grams(text):
@@ -100,7 +137,7 @@ def load_model(path=None):
     path = Path(path) if path is not None else ROOT / "demo"
     file = path / "model.json" if path.is_dir() else path
     model = json.loads(file.read_text(encoding="utf-8"))
-    if (not isinstance(model, dict) or model.get("format") != FORMAT
+    if (not isinstance(model, dict) or model.get("format") not in (FORMAT, SIGNAL_FORMAT)
             or model.get("preprocessor") != PREPROCESSOR or not isinstance(model.get("name"), str)
             or not isinstance(model.get("terms"), dict) or not model["terms"]
             or "threshold" not in model):
@@ -116,6 +153,12 @@ def load_model(path=None):
         if (field not in {"user", "domain"} or not 2 <= len(term) <= 4 or not isinstance(pair, list)
                 or len(pair) != 2 or not all(finite(x) for x in pair) or pair[0] <= 0):
             raise ValueError("invalid feature in model.json")
+    signals = model.get('signal_weights')
+    if (model['format'] == SIGNAL_FORMAT) != (signals is not None):
+        raise ValueError('model format does not match its signal weights')
+    if signals is not None and (not isinstance(signals, dict) or set(signals) != set(SIGNALS)
+                                or not all(finite(v) for v in signals.values())):
+        raise ValueError('invalid signal weights in model.json')
     domain_model = model.get('domain_model')
     if domain_model is not None:
         if model.get('flagged_domains'):
@@ -179,6 +222,8 @@ def score_parts(parts, model, *, explain=False):
         output["known_fragments"] = {f: [g for g in items if f + ':' + g in model["terms"]]
                                      for f, items in output["fragments"].items()}
         output["min_coverage"] = model["min_coverage"]
+        output['signals'] = address_signals(parts)
+        output['signals_used'] = 'signal_weights' in model
     weak = [f for f, stat in coverage.items()
             if stat["known"] == 0 or stat["fraction"] < model["min_coverage"]]
     if weak:
@@ -190,11 +235,14 @@ def score_parts(parts, model, *, explain=False):
                      for name, field, count, value, weight in terms]
     user_sum = math.fsum(t[-1] for t in contributions if t[1] == "user")
     domain_sum = math.fsum(t[-1] for t in contributions if t[1] == "domain")
-    margin = model["intercept"] + user_sum + domain_sum
+    signal_effects = {k: value * model['signal_weights'][k] for k, value in zip(SIGNALS, signal_vector(parts))} if 'signal_weights' in model else {}
+    signal_sum = math.fsum(signal_effects.values())
+    margin = model["intercept"] + user_sum + domain_sum + signal_sum
     output["score"] = logistic(margin)
     if explain:
         output["math"] = {"intercept": model["intercept"], "user_sum": user_sum, "domain_sum": domain_sum,
-                          "margin": margin, "sigmoid_of_margin": output["score"]}
+                          "signal_sum": signal_sum, "margin": margin, "sigmoid_of_margin": output["score"]}
+        output['signal_effects'] = signal_effects
         output["contributions"] = [{"term": name, "count": count, "tfidf": value, "weight": weight,
                                     "points": effect}
                                    for name, _, count, value, weight, effect in
@@ -210,7 +258,7 @@ def decide(score, threshold):
     return "looks_gibberish" if score >= threshold else "looks_ordinary"
 
 
-def predict(address, model, *, threshold=None, explain=False):
+def predict(address, model, *, threshold=None, explain=False, full_name=''):
     domains = getattr(model, 'domain_lookup', None)
     if domains is None:
         domains = frozenset(model.get('flagged_domains', ()))
@@ -224,7 +272,7 @@ def predict(address, model, *, threshold=None, explain=False):
     cutoff = model["threshold"] if threshold is None else threshold
     if cutoff is not None and not 0 <= cutoff <= 1:
         raise ValueError("threshold must be in [0, 1]")
-    parts, reason = preprocess(address)
+    parts, reason = preprocess(address, full_name)
     evidence = (score_parts(parts, model, explain=explain) if parts else
                 {"score": None, "coverage": None, "reason": reason})
     decision = decide(evidence["score"], cutoff)

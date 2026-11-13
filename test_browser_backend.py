@@ -8,6 +8,46 @@ from web import browser_backend as browser
 
 
 class BrowserBackendTests(unittest.TestCase):
+    def test_numeric_signals_and_optional_names_survive_training_and_import(self):
+        def csv_data(path, name):
+            emails = (ROOT / path).read_text().splitlines()
+            return {'name': name + '.csv', 'content': 'email,full_name\n' + '\n'.join(
+                f'{email},{email.split("@")[0] if name == "ordinary" else "Different Person"}' for email in emails) + '\n'}
+        data = {'ordinary': csv_data('examples/ordinary.txt', 'ordinary'),
+                'flagged': csv_data('examples/flagged.txt', 'flagged'),
+                'options': {'min_coverage': 0}}
+        trained = browser.handle('train', data, lambda _: None)
+        artifacts = browser.handle('artifacts', {'model': trained['id']}, lambda _: None)
+        model = artifacts['model.json']
+        self.assertEqual(model['format'], 'whole-email-char-tfidf-signals-logistic-v2')
+        self.assertGreater(artifacts['report.json']['training_names_available'], 0)
+        self.assertIn('name_similarity', model['signal_weights'])
+        imported = browser.handle('import', {'content': json.dumps(model)}, lambda _: None)
+        answer = browser.handle('score', {'model': imported['id'], 'email': 'Mukunda123@gmail.com',
+                                           'full_name': 'Mukunda'}, lambda _: None)
+        self.assertTrue(answer['signals_used'])
+        self.assertEqual(answer['signals']['capital_letters'], 1)
+        self.assertEqual(answer['signals']['numbers_in_a_row'], 3)
+        self.assertIsNotNone(answer['signals']['name_similarity'])
+        self.assertAlmostEqual(answer['math']['intercept'] + answer['math']['user_sum'] +
+                               answer['math']['domain_sum'] + answer['math']['signal_sum'], answer['math']['margin'])
+        no_name = browser.handle('score', {'model': imported['id'], 'email': 'Mukunda123@gmail.com'}, lambda _: None)
+        self.assertIsNone(no_name['signals']['name_similarity'])
+        self.assertNotEqual(answer['score'], no_name['score'])
+        evaluation = browser.handle('evaluate', {**data, 'model': imported['id']}, lambda _: None)
+        self.assertGreater(evaluation['results']['ordinary'], 0)
+        self.assertGreater(evaluation['results']['flagged'], 0)
+
+    def test_signal_counts_and_invalid_colon(self):
+        from engine import address_signals, preprocess
+        parts, _ = preprocess('Abc-12@gmail.com', 'Abc')
+        values = address_signals(parts)
+        self.assertEqual((values['length'], values['alphanumeric'], values['non_alphanumeric']), (6, 5, 1))
+        self.assertEqual((values['vowels'], values['consonants'], values['numbers']), (1, 2, 2))
+        self.assertEqual((values['hyphens'], values['numbers_in_a_row'], values['capital_letters']), (1, 2, 1))
+        self.assertAlmostEqual(values['vowel_ratio'], 1 / 6)
+        self.assertEqual(preprocess('abc:12@gmail.com')[1], 'invalid_address_shape')
+
     def test_guide_detection_numbers_match_the_demo(self):
         result = browser.handle('score', {'model': 'demo', 'email': 'mukunda@gmail.com'}, lambda _: None)
         self.assertEqual((result['coverage']['user']['known'], result['coverage']['user']['total']), (5, 15))

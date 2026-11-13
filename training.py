@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from engine import FORMAT, PREPROCESSOR, decide, feature_terms, predict, preprocess, score_parts
+from engine import SIGNAL_FORMAT, PREPROCESSOR, SIGNALS, decide, feature_terms, predict, preprocess, score_parts, signal_vector
 
 
 CLASSES = ("ordinary", "flagged")
@@ -31,7 +31,8 @@ def read_lists(flagged, ordinary):
                 if not line.strip():
                     continue
                 nonempty += 1
-                parts, reason = preprocess(line)
+                address, full_name = decode_training_line(line)
+                parts, reason = preprocess(address, full_name)
                 key = parts if parts is not None else line.strip().lower()
                 previous = seen.get(key)
                 if previous is not None:
@@ -51,6 +52,13 @@ def read_lists(flagged, ordinary):
                               "duplicate_lines": duplicate, "excluded_unique": dict(sorted(excluded.items()))}
     rows.sort(key=lambda r: (r[0].username, r[0].domain, r[1]))
     return rows, counts
+
+
+def decode_training_line(line):
+    if line.startswith('{'):
+        row = json.loads(line)
+        return row['email'], row.get('full_name', '')
+    return line.strip(), ''
 
 
 def split_rows(rows):
@@ -73,28 +81,35 @@ def split_rows(rows):
 
 
 def fit(rows, min_df):
+    from scipy.sparse import csr_matrix, hstack
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
-    from sklearn.pipeline import make_pipeline
-    model = make_pipeline(
-        TfidfVectorizer(tokenizer=str.split, token_pattern=None, lowercase=False, min_df=min_df,
-                        max_features=50_000, norm="l2", smooth_idf=True),
-        LogisticRegression(C=1.0, class_weight="balanced", solver="liblinear", max_iter=500, random_state=43),
-    )
+    vec = TfidfVectorizer(tokenizer=str.split, token_pattern=None, lowercase=False, min_df=min_df,
+                          max_features=50_000, norm="l2", smooth_idf=True)
+    lr = LogisticRegression(C=1.0, class_weight="balanced", solver="liblinear", max_iter=500, random_state=43)
     docs = [" ".join(feature_terms(p)) for p, _ in rows]
-    model.fit(docs, [y for _, y in rows])
-    vec, lr = model.steps[0][1], model.steps[1][1]
+    matrix = hstack((vec.fit_transform(docs), csr_matrix([signal_vector(p) for p, _ in rows])), format='csr')
+    lr.fit(matrix, [y for _, y in rows])
     if list(lr.classes_) != [0, 1]:
         raise ValueError("training requires both classes")
     terms = {key: [float(idf), float(coef)] for key, idf, coef in
-             zip(vec.get_feature_names_out(), vec.idf_, lr.coef_[0], strict=True)}
-    return model, terms, float(lr.intercept_[0])
+             zip(vec.get_feature_names_out(), vec.idf_, lr.coef_[0][:len(vec.idf_)], strict=True)}
+    weights = dict(zip(SIGNALS, map(float, lr.coef_[0][len(vec.idf_):]), strict=True))
+    return (vec, lr), terms, float(lr.intercept_[0]), weights
+
+
+def fitted_scores(parts, fitted):
+    from scipy.sparse import csr_matrix, hstack
+    vec, lr = fitted
+    matrix = hstack((vec.transform([' '.join(feature_terms(p)) for p in parts]),
+                     csr_matrix([signal_vector(p) for p in parts])), format='csr')
+    return lr.predict_proba(matrix)[:, 1]
 
 
 def exported_scores(rows, model, fitted=None):
     scores = [score_parts(p, model)["score"] for p, _ in rows]
     if fitted is not None:
-        expected = fitted.predict_proba([" ".join(feature_terms(p)) for p, _ in rows])[:, 1]
+        expected = fitted_scores([p for p, _ in rows], fitted)
         for s, ref in zip(scores, expected, strict=True):
             if s is not None and not math.isclose(s, ref, rel_tol=0, abs_tol=1e-12):
                 raise RuntimeError("exported model disagrees with scikit-learn")
@@ -142,7 +157,7 @@ def golden_cases(model, fitted):
         score = got["score"]
         if score is not None:
             parts, _ = preprocess(email)
-            score = float(fitted.predict_proba([" ".join(feature_terms(parts))])[0, 1])
+            score = float(fitted_scores([parts], fitted)[0])
         cases.append({"email": email, "score": score, "decision": got["decision"], "reason": got["reason"]})
     return cases
 
@@ -163,9 +178,9 @@ def train(flagged, ordinary, out, name=None, *, min_df=2, min_coverage=.20, max_
     stage('Splitting independent username groups')
     split = split_rows(rows)
     stage('Fitting vocabulary and model weights')
-    fitted, terms, intercept = fit(split["train"], min_df)
-    model = {"format": FORMAT, "preprocessor": PREPROCESSOR, "name": name or out.name, "intercept": intercept,
-             "min_coverage": min_coverage, "threshold": None, "terms": terms}
+    fitted, terms, intercept, signal_weights = fit(split["train"], min_df)
+    model = {"format": SIGNAL_FORMAT, "preprocessor": PREPROCESSOR, "name": name or out.name, "intercept": intercept,
+             "min_coverage": min_coverage, "threshold": None, "terms": terms, 'signal_weights': signal_weights}
     stage('Choosing a cutoff on validation data')
     validation = exported_scores(split["validation"], model, fitted)
     model["threshold"] = choose_threshold(validation, max_fpr)
@@ -180,7 +195,9 @@ def train(flagged, ordinary, out, name=None, *, min_df=2, min_coverage=.20, max_
     report = {"name": model["name"], "scikit_learn_version": sklearn.__version__, "seed": 43,
               "ingestion": ingestion, "split_counts": {n: len(v) for n, v in split.items()},
               "training_class_counts": {label: sum(y == i for _, y in split["train"]) for i, label in enumerate(CLASSES)},
-              "feature_count": len(terms), "min_df": min_df, "min_coverage": min_coverage,
+              "feature_count": len(terms), 'numeric_signals': list(SIGNALS),
+              'training_names_available': sum(bool(p.full_name.strip()) for p, _ in split['train']),
+              "min_df": min_df, "min_coverage": min_coverage,
               "validation_max_ordinary_false_flag_rate": max_fpr, "chosen_threshold": model["threshold"],
               "validation": metrics(validation, model["threshold"]), "test": metrics(test, model["threshold"]),
               "domain_model": domain_report, "metrics_scope": "email_model_only"}
@@ -211,11 +228,11 @@ def evaluate_with_domains(flagged, ordinary, model, threshold=None, *, include_s
         excluded = Counter()
         with Path(path).open(encoding='utf-8-sig') as file:
             for line_number, line in enumerate(file, 1):
-                address = line.strip()
+                address, full_name = decode_training_line(line)
                 if not address:
                     continue
                 nonblank += 1
-                parts, reason = preprocess(address)
+                parts, reason = preprocess(address, full_name)
                 host = email_host(address)
                 key = (parts, host) if parts is not None else address.lower()
                 previous = seen.get(key)
@@ -225,7 +242,7 @@ def evaluate_with_domains(flagged, ordinary, model, threshold=None, *, include_s
                     duplicate += 1
                     continue
                 seen[key] = label
-                outcome = predict(address, model, threshold=cutoff)
+                outcome = predict(address, model, threshold=cutoff, full_name=full_name)
                 if parts is None and outcome['decision'] not in ('flagged_domain', 'looks_gibberish'):
                     excluded[reason] += 1
                 else:
