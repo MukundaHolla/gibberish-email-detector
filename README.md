@@ -31,11 +31,11 @@ The server listens on your computer only. Training requires the installed depend
 
 ## How to use the interface
 
-Use the sidebar to open **Home**, **Train a model**, **Test an email**, **Import & export** (browser edition), **Test a list**, **Evaluate a model**, or **How it works**. Each feature has its own view; switching views keeps the current session. **Model history** is linked in the footer. The screenshots below show the hosted browser edition; local storage and training behavior differ as described below.
+Use the sidebar to open **Home**, **Train a model**, **Test an email**, **Import & export** (browser edition), **Test a list**, **Evaluate a model**, **How it works**, or **Interactive Learning Lab**. Each feature has its own view; switching views keeps the current session. **Model history** is linked in the footer. The screenshots below show the hosted browser edition; local storage and training behavior differ as described below.
 
 ### Explore the learning guide
 
-Open **How it works** for a plain-English glossary and interactive training and detection walkthroughs. The interactive lesson follows labeled examples through training, validation, testing, optional domain training, and detection. Use the lesson steps, replay, and pause controls to explore the illustrative data flow. The results lesson uses six fictional addresses to explain precision, recall, false alerts, and scored coverage. The guide distinguishes fragment coverage and scored coverage from code coverage.
+Open **How it works** for a plain-English glossary and interactive training and detection walkthroughs. The separate **Interactive Learning Lab**, linked below How it works, follows labeled examples through training, validation, testing, optional domain training, and detection. Use the lesson steps, replay, and pause controls to explore the illustrative data flow. The results lesson uses six fictional addresses to explain precision, recall, false alerts, and scored coverage. The guide distinguishes fragment coverage and scored coverage from code coverage.
 
 ![The interactive How it works guide.](docs/screenshots/07-guide.jpg)
 
