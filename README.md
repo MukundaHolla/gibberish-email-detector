@@ -35,7 +35,7 @@ Use the sidebar to open **Home**, **Train a model**, **Test an email**, **Import
 
 ### Explore the learning guide
 
-Open **How it works** for a plain-English glossary and interactive training and detection walkthroughs. The training walkthrough shows how labeled examples become an email model; the two-model section explains domain training and combined decisions. The detection walkthrough follows the bundled email-only demo score for `mukunda@gmail.com`. The results lesson uses six fictional addresses to explain precision, recall, false alerts, and scored coverage. The guide distinguishes fragment coverage and scored coverage from code coverage.
+Open **How it works** for a plain-English glossary and interactive training and detection walkthroughs. The interactive lesson follows labeled examples through training, validation, testing, optional domain training, and detection. Use the lesson steps, replay, and pause controls to explore the illustrative data flow. The results lesson uses six fictional addresses to explain precision, recall, false alerts, and scored coverage. The guide distinguishes fragment coverage and scored coverage from code coverage.
 
 ![The interactive How it works guide.](docs/screenshots/07-guide.jpg)
 
