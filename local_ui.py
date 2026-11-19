@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 from engine import ROOT, load_model, predict, preprocess
 from domain_rules import parse_domain_file
+from spreadsheet_input import as_csv
 from training import evaluate, train
 
 RUNS = ROOT / 'runs'
@@ -96,12 +97,13 @@ def parse_file(data):
 
 
 def parse_rows(data, *, with_names=False):
+    data = as_csv(data)
     name = data.get('name', '')
     content = data.get('content', '')
     if name.lower().endswith('.txt'):
         return [(n, line.strip(), '') if with_names else (n, line.strip()) for n, line in enumerate(content.lstrip('\ufeff').splitlines(), 1) if line.strip()]
     if not name.lower().endswith('.csv'):
-        raise ValueError('Choose a .txt or .csv file.')
+        raise ValueError('Choose a .txt, .csv, or .xlsx file.')
     reader = csv.DictReader(io.StringIO(content.lstrip('\ufeff'), newline=''))
     if not reader.fieldnames:
         raise ValueError(f'{name}: CSV needs a header row.')
@@ -247,6 +249,10 @@ class Handler(BaseHTTPRequestHandler):
             html = (UI / 'index.html').read_text(encoding='utf-8').replace('<!-- LEARN_PAGE -->', (UI / 'learn.html').read_text(encoding='utf-8'))
             return self.respond(200, html.encode(), 'text/html; charset=utf-8')
         files = {'/model-lesson.html': ('model-lesson.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/review.js': ('review.js', 'text/javascript; charset=utf-8'), '/routes.js': ('routes.js', 'text/javascript; charset=utf-8'), '/learn.js': ('learn.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8'), '/guide.css': ('guide.css', 'text/css; charset=utf-8'), '/theme.css': ('theme.css', 'text/css; charset=utf-8'), '/favicon.svg': ('favicon.svg', 'image/svg+xml')}
+        for kind in ('ordinary-emails', 'flagged-emails', 'ordinary-domains', 'flagged-domains'):
+            for ext, mime in (('txt', 'text/plain; charset=utf-8'), ('csv', 'text/csv; charset=utf-8'), ('xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')):
+                sample = f'sample-{kind}.{ext}'
+                files['/' + sample] = (sample, mime)
         if path in files:
             name, kind = files[path]
             return self.respond(200, (UI / name).read_bytes(), kind)

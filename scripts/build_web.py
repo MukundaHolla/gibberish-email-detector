@@ -5,7 +5,7 @@ import shutil
 root = Path(__file__).resolve().parent.parent
 out = root / 'web-dist'
 out.mkdir(exist_ok=True)
-files = {'engine.py':'engine.py', 'domain_rules.py':'domain_rules.py', 'domain_ml.py':'domain_ml.py', 'training.py':'training.py', 'local_ui.py':'local_ui.py',
+files = {**{f'ui/sample-{kind}.{ext}': f'sample-{kind}.{ext}' for kind in ('ordinary-emails', 'flagged-emails', 'ordinary-domains', 'flagged-domains') for ext in ('txt', 'csv', 'xlsx')}, 'spreadsheet_input.py':'spreadsheet_input.py', 'engine.py':'engine.py', 'domain_rules.py':'domain_rules.py', 'domain_ml.py':'domain_ml.py', 'training.py':'training.py', 'local_ui.py':'local_ui.py',
          'assets/public_suffix_list.dat':'assets/public_suffix_list.dat',
          'assets/PUBLIC_SUFFIX_LICENSE.md':'assets/PUBLIC_SUFFIX_LICENSE.md',
          'demo/model.json':'demo/model.json', 'demo/report.json':'demo/report.json',

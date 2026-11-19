@@ -1,6 +1,6 @@
 # Standalone gibberish email detector
 
-Give the trainer two labeled TXT or CSV files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels, using character fragments and username measurements. You can optionally train a second model on flagged and ordinary domains. The saved model can analyze a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
+Give the trainer two labeled TXT, CSV, or Excel (.xlsx) files. One contains full email addresses your reviewers flagged for gibberish spelling. The other contains ordinary full email addresses. It learns one scoring model from the labels, using character fragments and username measurements. You can optionally train a second model on flagged and ordinary domains. The saved model can analyze a new bare email address or a whole file. The included demo was trained on invented examples. No real customer lists were supplied.
 
 If machine learning is new to you, start with [How it works](HOW_IT_WORKS.md). It follows one email all the way from characters to a numeric score and includes training and prediction flow diagrams.
 
@@ -45,12 +45,14 @@ Create two UTF-8 files: **flagged** addresses reviewed for gibberish spelling an
 
 - **TXT:** Put one complete email address on each line, with no header. Blank lines are ignored.
 - **CSV:** Include a header row. A column named `email`, `email address`, or `email_address` is detected automatically. Otherwise, expand **CSV column name (optional)** and enter the exact column header, such as `contact_email`. This field is for a column name, not pasted addresses; it is unnecessary for TXT files.
+- **Excel (.xlsx):** Put column headers in the first row of the first worksheet. The same automatic column detection and optional exact column-name setting used for CSV apply. Formulas must be pasted as values. The local app’s 20 MiB request limit includes base64 encoding; workbooks are also limited to 100 MiB uncompressed. The browser edition processes files on your device. Legacy `.xls` files must first be saved as `.xlsx` or CSV.
+- **Examples:** Download the ordinary and flagged email and domain TXT, CSV, and Excel examples on the training page. They illustrate the format, not a dataset large enough to train.
 - **Optional names:** Include a `full_name` column alongside `email` in both labeled CSV files to train name similarity. Use the same column in holdout and bulk CSVs, and enter the name when testing one address. TXT files have no names. Missing names are marked unavailable, not treated as zero similarity. Names should be present across both labels to avoid teaching the model that missing names imply a label.
 - Keep independent holdout data aside before training. Use many reviewed examples; the code's minimum of five eligible username groups per class is only a mechanical requirement.
 
 For a practice run, use the invented files [examples/flagged.txt](examples/flagged.txt) and [examples/ordinary.txt](examples/ordinary.txt).
 
-Optionally upload **both flagged and ordinary domain files** to train a second machine-learning model alongside the email model. Use TXT with one full domain per line or a CSV with a `domain` column. For example, `mail.example.com` is represented as its registrable domain, `example.com`; conflicting labels for the same registrable domain must be resolved.
+Optionally upload **both flagged and ordinary domain files** to train a second machine-learning model alongside the email model. Use TXT with one full domain per line, or CSV / Excel with a `domain` column. Enter a different exact column header in the optional column-name setting. For example, `mail.example.com` is represented as its registrable domain, `example.com`; conflicting labels for the same registrable domain must be resolved.
 
 The domain model learns character fragments and weights; the full uploaded domain lists are not stored as an exact-match list. A training domain is not guaranteed to be flagged later. Learned fragments can still reveal parts of the data, so keep model files private when appropriate. The false-alert budget applies separately to each model, so the combined false-alert rate can be higher. Both models run when an address is tested: either can flag; if neither flags and one is unsure or has no cutoff, the combined result is unsure; both must say ordinary for an ordinary result. Each domain class needs at least five independent registrable domains, and both classes must appear in each split; use many more for meaningful evaluation. The training report measures the two models separately; evaluate their combined behavior on independent email addresses and domains not used to train either model. Older models with a saved direct-domain list keep their legacy behavior when imported.
 
@@ -67,7 +69,7 @@ Each model’s false-alert budget is selected independently. It does not guarant
 
 ![The browser training page with separate file uploads for flagged and ordinary examples.](docs/screenshots/01-train.jpg)
 
-1. Under **Train a model**, use **Upload TXT or CSV** to choose each email file. To also train the domain model, upload both flagged and ordinary domain files under **Train a domain model**. For CSV files with nonstandard headers, expand the corresponding optional column-name setting and enter the exact header.
+1. Under **Train a model**, use **Upload TXT, CSV or XLSX** to choose each email file. To also train the domain model, upload both flagged and ordinary domain files under **Train a domain model**. For CSV or Excel files with nonstandard headers, expand the corresponding optional column-name setting and enter the exact header.
 2. Click **Preview data** to see duplicates, contradictory labels, and unsupported addresses. Select rows and click **Exclude selected & review again** to leave them out of this run; your original files are not changed. Replacing a file or changing a CSV column resets these exclusions.
 3. Optionally enter a model name and expand **Training settings**. The defaults are a minimum fragment frequency of 2, minimum component coverage of 20%, and validation false-alert budget of 5%. The budget is a target measured on the validation data, not a future guarantee.
 4. Click **Train model**. The status shows the current stage, and only one UI training run can run at a time. In the browser edition, keep the page open until training finishes and download the model before leaving. In the local edition, refreshing loses the progress view but training can continue while the server runs; stopping the server interrupts it.
@@ -93,7 +95,7 @@ Open **Import & export** to load a compatible `model.json` (up to 10 MiB). Impor
 
 ![Bulk analysis of the bundled invented sample list.](docs/screenshots/03-bulk.jpg)
 
-1. Under **Test a list**, select a model and upload an unlabeled TXT or CSV file. For CSV, specify the email column if it isn't detected. Try [examples/incoming.txt](examples/incoming.txt) with the demo.
+1. Under **Test a list**, select a model and upload an unlabeled TXT, CSV or Excel file. For CSV, specify the email column if it isn't detected. Try [examples/incoming.txt](examples/incoming.txt) with the demo.
 2. Click **Analyze list**. The summary counts decisions; use **Show** and the page controls to inspect results. The interface accepts up to 10,000 addresses per batch; the CLI's `batch` command is available for larger TXT lists.
 3. Click **Download all results · CSV** to save the full list with line numbers, scores, decisions, model, threshold, coverage, and reasons. The download includes all decisions even when a filter is active. Cells that could be interpreted as spreadsheet formulas are prefixed with an apostrophe.
 

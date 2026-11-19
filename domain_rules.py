@@ -2,6 +2,7 @@
 import csv
 import io
 from engine import DNS_LABEL, LOCAL
+from spreadsheet_input import as_csv
 
 
 def normalize_domain(value):
@@ -19,6 +20,7 @@ def normalize_domain(value):
 
 
 def parse_domain_file(data):
+    data = as_csv(data)
     name = str(data.get('name', ''))
     content = str(data.get('content', '')).lstrip('\ufeff')
     column = str(data.get('column', '')).strip()
@@ -47,7 +49,7 @@ def parse_domain_file(data):
                 raise ValueError('Enter the domain column name from the CSV header.')
         rows = [(line, row[idx] if idx < len(row) else '') for line, row in records]
     else:
-        raise ValueError('Choose a .txt or .csv domain file.')
+        raise ValueError('Choose a .txt, .csv, or .xlsx domain file.')
     domains, seen, errors, duplicates = [], set(), [], 0
     for line, value in rows:
         try:

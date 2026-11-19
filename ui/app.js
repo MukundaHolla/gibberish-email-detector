@@ -8,12 +8,19 @@ async function api(path, payload) {
   if (!response.ok) throw Error(data.error || 'Request failed');
   return data;
 }
+async function uploadFile(file, column) {
+  if (!file.name.toLowerCase().endsWith('.xlsx')) return {name:file.name, content:await file.text(), column};
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return {name:file.name, content_base64:btoa(binary), column};
+}
 async function files() {
   const result = {};
   for (const label of ['flagged','ordinary']) {
     const file = $(label).files[0];
     if (!file) throw Error(`Choose a ${label} file.`);
-    result[label] = {name:file.name, content:await file.text(), column:$(`${label}-column`).value};
+    result[label] = await uploadFile(file, $(`${label}-column`).value);
   }
   return result;
 }
@@ -74,7 +81,7 @@ $('train-button').onclick = async () => {
     const domain_files = {};
     for (const label of ['flagged','ordinary']) {
       const file = $(`${label}-domains`).files[0];
-      if (file) domain_files[label] = {name:file.name, content:await file.text(), column:$(`${label}-domains-column`).value};
+      if (file) domain_files[label] = await uploadFile(file, $(`${label}-domains-column`).value);
     }
     if (Boolean(domain_files.flagged) !== Boolean(domain_files.ordinary)) throw Error('Choose both flagged and ordinary domain files, or leave both empty.');
     const started = await api('/api/train/start', {...input,domain_files,exclude:trainingExcluded,name:$('model-name').value,options:{min_df:minDf,min_coverage:coverage/100,max_fpr:fpr/100}});
@@ -203,10 +210,10 @@ $('batch-run').onclick = async () => {
   $('batch-output').hidden = true;
   try {
     const file = $('batch-file').files[0];
-    if (!file) throw Error('Choose a TXT or CSV file.');
+    if (!file) throw Error('Choose a TXT, CSV, or XLSX file.');
     button.disabled = true;
     status('batch-status', 'Analyzing your list…');
-    const data = await api('/api/batch', {model:$('batch-model').value, file:{name:file.name, content:await file.text(), column:$('batch-column').value}});
+    const data = await api('/api/batch', {model:$('batch-model').value, file:await uploadFile(file, $('batch-column').value)});
     batchResults = data.results;
     const count = decision => batchResults.filter(r => r.decision === decision).length;
     $('batch-summary').innerHTML = `<h4>Analysis complete</h4><div class="metrics">${metric(batchResults.length, 'addresses')}${metric(count('looks_gibberish'), 'looks gibberish')}${metric(count('flagged_domain'), 'flagged by domain')}${metric(count('looks_ordinary'), 'looks ordinary')}${metric(count('unsure'), 'unsure')}${metric(count('score_only'), 'score only')}</div>`;
@@ -260,7 +267,7 @@ $('evaluate-run').onclick = async () => {
     for (const label of ['flagged','ordinary']) {
       const file = $(`evaluate-${label}`).files[0];
       if (!file) throw Error(`Choose the ${label} holdout file.`);
-      input[label] = {name:file.name, content:await file.text(), column:$(`evaluate-${label}-column`).value};
+      input[label] = await uploadFile(file, $(`evaluate-${label}-column`).value);
     }
     button.disabled = true;
     status('evaluate-status', 'Evaluating holdout data…');
