@@ -216,13 +216,20 @@ def train(flagged, ordinary, out, name=None, *, min_df=2, min_coverage=.20, max_
             "threshold": model["threshold"], "test": report["test"]}
 
 
-def evaluate_with_domains(flagged, ordinary, model, threshold=None, *, include_scores=False, include_breakdowns=False):
+def evaluate_with_domains(flagged, ordinary, model, threshold=None, *, include_scores=False, include_breakdowns=False, include_comparison=False):
     """Evaluate the full decision pipeline while retaining full email domains."""
     from domain_rules import email_host
     cutoff = model['threshold'] if threshold is None else threshold
     if cutoff is not None and not 0 <= cutoff <= 1:
         raise ValueError('threshold must be in [0, 1]')
     seen, rows, ingestion = {}, [], {}
+    compare = include_comparison and model.get('domain_model') and not model.get('flagged_domains')
+    if compare:
+        # Count the same unique inputs for both decisions, including abstentions.
+        email_counts = Counter()
+        combined_counts = Counter()
+        changes = {'extra_catches': [], 'extra_false_alerts': [], 'other_changes': []}
+
     for label, path in enumerate((ordinary, flagged)):
         unique = duplicate = nonblank = 0
         excluded = Counter()
@@ -243,6 +250,17 @@ def evaluate_with_domains(flagged, ordinary, model, threshold=None, *, include_s
                     continue
                 seen[key] = label
                 outcome = predict(address, model, threshold=cutoff, full_name=full_name)
+                if compare:
+                    before = outcome['email_decision']
+                    after = outcome['decision']
+                    email_counts[label, before] += 1
+                    combined_counts[label, after] += 1
+                    if before != after:
+                        group = 'other_changes'
+                        if after == 'looks_gibberish':
+                            group = 'extra_catches' if label else 'extra_false_alerts'
+                        changes[group].append({'address': address, 'label': CLASSES[label],
+                                               'email': before, 'combined': after})
                 if parts is None and outcome['decision'] not in ('flagged_domain', 'looks_gibberish'):
                     excluded[reason] += 1
                 else:
@@ -280,6 +298,15 @@ def evaluate_with_domains(flagged, ordinary, model, threshold=None, *, include_s
               'domain_flag_kind': 'model' if model.get('domain_model') else 'rule',
               'decision_coverage': sum(outcome['decision'] in ('looks_gibberish', 'looks_ordinary', 'flagged_domain') for _, _, outcome in rows) / (len(rows) + sum(extra)) if rows or sum(extra) else None,
               'evaluation_scope': 'model_and_domains'}
+    if compare:
+        def count_results(counts):
+            caught = counts[1, 'looks_gibberish']
+            return {'caught': caught, 'false_alerts': counts[0, 'looks_gibberish'],
+                    'missed': ingestion['flagged']['nonblank_lines'] - ingestion['flagged']['duplicate_lines'] - caught,
+                    'unsure': sum(n for (_, decision), n in counts.items() if decision == 'unsure'),
+                    'score_only': sum(n for (_, decision), n in counts.items() if decision == 'score_only')}
+        result['comparison'] = {'email': count_results(email_counts), 'combined': count_results(combined_counts),
+                                'changes': changes}
     if include_scores:
         grouped = {}
         for _, label, outcome in rows:
@@ -308,9 +335,9 @@ def evaluate_with_domains(flagged, ordinary, model, threshold=None, *, include_s
     return result
 
 
-def evaluate(flagged, ordinary, model, threshold=None, *, include_scores=False, include_breakdowns=False):
+def evaluate(flagged, ordinary, model, threshold=None, *, include_scores=False, include_breakdowns=False, include_comparison=False):
     if model.get('flagged_domains') or model.get('domain_model'):
-        return evaluate_with_domains(flagged, ordinary, model, threshold, include_scores=include_scores, include_breakdowns=include_breakdowns)
+        return evaluate_with_domains(flagged, ordinary, model, threshold, include_scores=include_scores, include_breakdowns=include_breakdowns, include_comparison=include_comparison)
     rows, counts = read_lists(flagged, ordinary)
     cutoff = model["threshold"] if threshold is None else threshold
     if cutoff is not None and not 0 <= cutoff <= 1:

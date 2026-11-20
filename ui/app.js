@@ -15,6 +15,43 @@ async function uploadFile(file, column) {
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return {name:file.name, content_base64:btoa(binary), column};
 }
+// Invented examples for practicing the complete training and evaluation workflow.
+function demoAddresses(label, holdout = false) {
+  const first = holdout ? 100 : 0;
+  const count = holdout ? 20 : 60;
+  return Array.from({length: count}, (_, offset) => {
+    const n = first + offset;
+    const user = label === 'ordinary' ? `marina.person${n}` : `qzxv${n}kqp`;
+    const domain = label === 'ordinary' ? `friendly${n}.com` : `qzxv${n}kqp.com`;
+    return `${user}@${domain}`;
+  });
+}
+function setDemoFile(id, name, lines) {
+  const input = $(id);
+  const files = new DataTransfer();
+  files.items.add(new File([lines.join('\n') + '\n'], name, {type:'text/plain'}));
+  input.files = files.files;
+  input.dispatchEvent(new Event('change', {bubbles:true}));
+}
+$('load-demo-training').onclick = () => {
+  for (const label of ['flagged', 'ordinary']) {
+    const addresses = demoAddresses(label);
+    setDemoFile(label, `demo-training-${label}-emails.txt`, addresses);
+    setDemoFile(`${label}-domains`, `demo-training-${label}-domains.txt`, addresses.map(address => address.split('@')[1]));
+    $(`${label}-column`).value = '';
+    $(`${label}-domains-column`).value = '';
+  }
+  $('model-name').value = 'Demo · email and domain';
+  status('training-status', 'Four invented training files are loaded. Select Train model to continue.');
+};
+$('load-demo-holdout').onclick = () => {
+  for (const label of ['flagged', 'ordinary']) {
+    setDemoFile(`evaluate-${label}`, `demo-evaluation-${label}.txt`, demoAddresses(label, true));
+    $(`evaluate-${label}-column`).value = '';
+  }
+  $('evaluate-result').innerHTML = '';
+  status('evaluate-status', 'Separate invented evaluation files are loaded. Select your demo model and choose Evaluate model.');
+};
 async function files() {
   const result = {};
   for (const label of ['flagged','ordinary']) {
@@ -259,6 +296,56 @@ $('batch-download').onclick = () => {
   link.href = url; link.download = 'email-analysis.csv'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+function renderDomainComparison(report) {
+  const result = $('evaluate-result');
+  const comparison = report.comparison;
+  if (!comparison) {
+    result.insertAdjacentHTML('afterbegin', '<p class="training-note">To compare email-only and combined decisions, select a model trained with both email and domain files.</p>');
+    return;
+  }
+  const {email, combined, changes} = comparison;
+  const measures = [['caught','Correct alerts'], ['false_alerts','Ordinary emails flagged'],
+    ['missed','Flagged emails missed'], ['unsure','Unsure decisions']];
+  if (email.score_only || combined.score_only) measures.push(['score_only','Score without a cutoff']);
+  const groups = [['extra_catches','Additional correct alerts'],
+    ['extra_false_alerts','Additional false alerts'], ['other_changes','Other changed decisions']];
+  const total = report.results.flagged + report.results.ordinary;
+  const card = document.createElement('section');
+  card.className = 'result';
+  card.innerHTML = `<h3>Compare models</h3>
+    <p>Adding the domain model caught <b>${changes.extra_catches.length}</b> more reviewed flagged emails and flagged <b>${changes.extra_false_alerts.length}</b> more ordinary emails.</p>
+    <p>Both columns use the same ${total} unique holdout addresses and the saved model cutoffs.</p>
+    <div class="table-wrap"><table class="comparison-table"><thead><tr><th>Outcome</th><th>Email only</th><th>Email + domain</th></tr></thead>
+    <tbody>${measures.map(([key,label]) => `<tr><th scope="row">${label}</th><td>${email[key]}</td><td>${combined[key]}</td></tr>`).join('')}</tbody></table></div>`;
+  const names = {looks_ordinary:'Ordinary', looks_gibberish:'Flagged', unsure:'Unsure', score_only:'Score only'};
+  for (const [key, title] of groups) {
+    const rows = changes[key];
+    const details = document.createElement('details');
+    details.className = 'score-details';
+    details.innerHTML = `<summary>${title} (${rows.length})</summary><div></div>`;
+    const content = details.lastElementChild;
+    function showPage(page) {
+      if (!rows.length) { content.textContent = 'No addresses in this group.'; return; }
+      const start = page * 25;
+      content.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Email address</th><th>Reviewed label</th><th>Email only</th><th>Email + domain</th></tr></thead><tbody>
+        ${rows.slice(start, start + 25).map(row => `<tr><td>${escapeHTML(row.address)}</td><td>${escapeHTML(row.label)}</td><td>${names[row.email]}</td><td>${names[row.combined]}</td></tr>`).join('')}
+        </tbody></table></div>`;
+      if (rows.length <= 25) return;
+      const pager = document.createElement('div');
+      pager.className = 'review-pagination';
+      pager.innerHTML = `<button type="button" class="secondary">Previous</button><span>${start+1}–${Math.min(start+25, rows.length)} of ${rows.length}</span><button type="button" class="secondary">Next</button>`;
+      pager.firstElementChild.disabled = page === 0;
+      pager.lastElementChild.disabled = start + 25 >= rows.length;
+      pager.firstElementChild.onclick = () => showPage(page - 1);
+      pager.lastElementChild.onclick = () => showPage(page + 1);
+      content.append(pager);
+    }
+    details.addEventListener('toggle', () => { if (details.open && !content.hasChildNodes()) showPage(0); });
+    card.append(details);
+  }
+  result.prepend(card);
+}
+
 $('evaluate-run').onclick = async () => {
   const button = $('evaluate-run');
   $('evaluate-result').innerHTML = '';
@@ -279,6 +366,7 @@ $('evaluate-run').onclick = async () => {
       return `<tr><td>${escapeHTML(label)}</td><td>${stats.nonblank_lines}</td><td>${stats.eligible_unique}</td><td>${stats.duplicate_lines}</td><td>${excluded}${reasons ? ` (${escapeHTML(reasons)})` : ''}</td></tr>`;
     }).join('');
     $('evaluate-result').innerHTML = `<div class="result"><h4>Holdout results · ${escapeHTML(report.model)}</h4><p>${report.domain_flags ? (report.domain_flag_kind === 'model' ? 'These results combine the email and domain models. ' : 'These results include the legacy direct-domain rule. ') : ''}Email-model cutoff: ${report.threshold == null ? (report.domain_flags ? 'none — domain decisions may still flag' : 'none — spelling scores have no saved cutoff') : report.threshold.toFixed(6)}. A flagged decision counts as an alert; unsure and score-only results do not alert.</p><div class="metrics">${metric(pct(r.coverage),report.domain_flag_kind === 'model' ? 'email score coverage' : 'scored coverage')}${report.domain_flag_kind === 'model' ? metric(pct(report.decision_coverage),'combined decision coverage') : ''}${metric(pct(r.recall),'recall')}${metric(pct(r.precision),'precision')}${metric(pct(r.ordinary_false_flag_rate),'ordinary false-flag rate')}</div><p>Of ${r.flagged} flagged examples, ${r.true_flags} were alerted and ${r.missed_flags} were not alerted (including abstentions). Of ${r.ordinary} ordinary examples, ${r.false_flags} were falsely alerted and ${r.ordinary_unflagged} were not alerted. ${r.abstained} examples had no email-model score${report.domain_unscored ? `, including ${report.domain_unscored} flagged by the domain ${report.domain_flag_kind}` : ''}.</p><h4>Input review</h4><div class="table-wrap"><table><thead><tr><th>LABEL</th><th>NONBLANK</th><th>ELIGIBLE UNIQUE</th><th>DUPLICATES</th><th>EXCLUDED UNIQUE</th></tr></thead><tbody>${ingestion}</tbody></table></div><p>Duplicate model inputs count once. Excluded inputs are included as abstentions; excluded flagged examples count as missed flags. Precision depends on the holdout’s class balance, so use naturally sampled data to estimate real alert volume.</p><div class="threshold-panel"><div class="threshold-header"><div><h4>Explore a cutoff</h4><p>Change the email-model cutoff to explore its effect. The domain model keeps its saved cutoff. This experiment does not change your saved model.</p></div><span class="threshold-value" id="threshold-value"></span></div><label class="threshold-label" for="threshold-range">EXPERIMENTAL EMAIL-MODEL CUTOFF</label><input id="threshold-range" type="range" min="0" max="1" step="any" value="${report.threshold ?? 0.5}"><div class="threshold-ends"><span>0 · More alerts</span><span>1 · Fewer alerts</span></div><div id="threshold-metrics" class="metrics"></div><p id="threshold-detail"></p>${report.threshold == null ? '<p>This model has no saved cutoff; the slider is an explicit experiment.</p>' : '<button type="button" class="secondary" id="threshold-reset">Use saved threshold</button>'}<p class="threshold-note">Choosing a cutoff using this holdout makes it part of model development. Measure the chosen cutoff on a different independent holdout before relying on its results.</p></div></div>`;
+    renderDomainComparison(report);
     const slider = $('threshold-range');
     const updateThreshold = (saved = false) => {
       const cutoff = saved && report.threshold != null ? report.threshold : Number(slider.value);

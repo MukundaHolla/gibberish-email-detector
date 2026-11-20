@@ -65,6 +65,10 @@ The domain model learns character fragments and weights; the full uploaded domai
 
 Each model’s false-alert budget is selected independently. It does not guarantee the combined system’s false-alert rate. Evaluate the whole system using independent labeled emails whose registrable domains were also kept out of both training datasets. A score is a pattern-based model output, not proof of fraud or mailbox existence.
 
+### Try the complete demo
+
+On **Train a model**, choose **Load demo training files** and then **Train model**. On **Evaluate a model**, choose **Load separate demo evaluation files**, select the demo model, and choose **Evaluate model**. The invented training and evaluation addresses and domains are separate. These examples illustrate the workflow and do not measure real-world accuracy.
+
 ### 2. Review the data and train
 
 ![The browser training page with separate file uploads for flagged and ordinary examples.](docs/screenshots/01-train.jpg)
@@ -106,6 +110,9 @@ To build a reviewed dataset, mark binary decisions **Correct**, **Incorrect**, o
 ### 5. Evaluate on independent data
 
 ![The holdout evaluation form with separate file uploads.](docs/screenshots/05-evaluate.jpg)
+
+With a trained domain model selected, **Compare models** shows email-only and combined decisions on the same unique holdout addresses. Expand the additional correct alerts, additional false alerts, or other changed decisions to inspect the addresses and their reviewed labels. The comparison uses the saved cutoffs.
+
 
 1. Set aside separate, labeled flagged and ordinary email files that were not used to train or select either model, preferably collected later and from an independent source. For the combined system, their registrable domains should also be independent of the domain-training data.
 2. Under **Evaluate a model**, select the model, choose the holdout files, and click **Evaluate model**.

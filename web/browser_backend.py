@@ -72,7 +72,7 @@ def handle(route, data, progress):
             f, o = Path(tmp) / 'flagged.txt', Path(tmp) / 'ordinary.txt'
             f.write_text('\n'.join(flagged), encoding='utf-8')
             o.write_text('\n'.join(ordinary), encoding='utf-8')
-            return evaluate(f, o, model(), include_scores=True, include_breakdowns=True)
+            return evaluate(f, o, model(), include_scores=True, include_breakdowns=True, include_comparison=True)
     if route == 'train':
         opts = training_options(data)
         domain_files = data.get('domain_files') or {}

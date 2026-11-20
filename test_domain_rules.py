@@ -99,13 +99,31 @@ class DomainRuleTests(unittest.TestCase):
             flagged, ordinary = Path(tmp) / 'flagged.txt', Path(tmp) / 'ordinary.txt'
             flagged.write_text('x@sub.example.com\nqzxv8801@gmail.com\n')
             ordinary.write_text('good@example.com\nmukunda@gmail.com\n')
-            report = evaluate(flagged, ordinary, model, include_scores=True, include_breakdowns=True)
+            report = evaluate(flagged, ordinary, model, include_scores=True, include_breakdowns=True, include_comparison=True)
             self.assertEqual(report['domain_flag_kind'], 'model')
             self.assertEqual(report['domain_flags'], {'ordinary': 1, 'flagged': 1})
             self.assertEqual(report['results']['true_flags'], 2)
             self.assertEqual(report['results']['false_flags'], 1)
             self.assertEqual(report['results']['precision'], 2/3)
             self.assertEqual(report['decision_coverage'], .75)
+            comparison = report['comparison']
+            self.assertEqual(comparison['email']['caught'], 1)
+            self.assertEqual(comparison['combined']['caught'], 2)
+            self.assertEqual(comparison['changes']['extra_catches'], [
+                {'address': 'x@sub.example.com', 'label': 'flagged',
+                 'email': 'unsure', 'combined': 'looks_gibberish'}])
+            self.assertEqual([r['address'] for r in comparison['changes']['extra_false_alerts']], ['good@example.com'])
+            self.assertEqual([r['address'] for r in comparison['changes']['other_changes']], ['mukunda@gmail.com'])
+
+            # A duplicate, an input both components flag, and an unsupported input.
+            flagged.write_text('x@sub.example.com\nx@sub.example.com\nqzxv8801@gmail.com\nbroken\n')
+            model['domain_model']['terms']['gm'] = [1.0, 4.0]
+            paired = evaluate(flagged, ordinary, model, include_comparison=True)['comparison']
+            self.assertEqual(len(paired['changes']['extra_catches']), 1)
+            self.assertEqual(paired['email']['missed'], 2)
+            self.assertEqual(paired['combined']['missed'], 1)
+            self.assertEqual(paired['combined']['unsure'], 1)
+
 
 
 if __name__ == '__main__':

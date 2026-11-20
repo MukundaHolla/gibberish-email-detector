@@ -282,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                     f, o = Path(tmp) / 'flagged.txt', Path(tmp) / 'ordinary.txt'
                     f.write_text('\n'.join(flagged), encoding='utf-8')
                     o.write_text('\n'.join(ordinary), encoding='utf-8')
-                    result = evaluate(f, o, get_model(data.get('model', 'demo')), include_scores=True, include_breakdowns=True)
+                    result = evaluate(f, o, get_model(data.get('model', 'demo')), include_scores=True, include_breakdowns=True, include_comparison=True)
                 self.respond(200, result)
             elif path == '/api/score':
                 email = data.get('email', '').strip()
