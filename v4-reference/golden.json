@@ -1,0 +1,62 @@
+[
+  {
+    "decision": "looks_ordinary",
+    "email": "anu.rao27@gmail.com",
+    "reason": null,
+    "score": 0.02165318490178537
+  },
+  {
+    "decision": "looks_gibberish",
+    "email": "qzxv8801@gmail.com",
+    "reason": null,
+    "score": 0.770426400835358
+  },
+  {
+    "decision": "looks_ordinary",
+    "email": "mukunda@gmail.com",
+    "reason": null,
+    "score": 0.017421477322810314
+  },
+  {
+    "decision": "unsure",
+    "email": "mukunda@qzxvpk.com",
+    "reason": "low_coverage_domain",
+    "score": null
+  },
+  {
+    "decision": "looks_ordinary",
+    "email": "MUKUNDA@GMAIL.COM",
+    "reason": null,
+    "score": 0.017421477322810314
+  },
+  {
+    "decision": "looks_ordinary",
+    "email": "rohan+travel@mail.pinepost.co.in",
+    "reason": null,
+    "score": 0.02113598972931493
+  },
+  {
+    "decision": "unsure",
+    "email": "x@gmail.com",
+    "reason": "component_too_short",
+    "score": null
+  },
+  {
+    "decision": "unsure",
+    "email": "||||||||@gmail.com",
+    "reason": "low_coverage_user",
+    "score": null
+  },
+  {
+    "decision": "unsure",
+    "email": "abc@privaterelay.appleid.com",
+    "reason": "recognized_private_relay",
+    "score": null
+  },
+  {
+    "decision": "unsure",
+    "email": "broken@@example.com",
+    "reason": "invalid_address_shape",
+    "score": null
+  }
+]

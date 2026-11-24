@@ -1,0 +1,90 @@
+{
+  "chosen_threshold": 0.6393385401992003,
+  "domain_model": null,
+  "feature_count": 50000,
+  "ingestion": {
+    "flagged": {
+      "duplicate_lines": 10,
+      "eligible_unique": 41780,
+      "excluded_unique": {
+        "component_too_short": 565,
+        "invalid_address_shape": 1,
+        "no_recognized_registrable_domain": 1180
+      },
+      "nonblank_lines": 43536
+    },
+    "ordinary": {
+      "duplicate_lines": 28,
+      "eligible_unique": 106951,
+      "excluded_unique": {
+        "component_too_short": 322,
+        "no_recognized_registrable_domain": 1606,
+        "recognized_private_relay": 1,
+        "unsupported_address_form": 1
+      },
+      "nonblank_lines": 108909
+    }
+  },
+  "metrics_scope": "email_model_only",
+  "min_coverage": 0.2,
+  "min_df": 2,
+  "name": "gibberish-detector-v4-fresh",
+  "numeric_signals": [
+    "alphanumeric",
+    "non_alphanumeric",
+    "vowels",
+    "consonants",
+    "hyphens",
+    "colons",
+    "numbers",
+    "numbers_in_a_row",
+    "capital_letters",
+    "length",
+    "vowel_ratio",
+    "consonant_ratio",
+    "non_alphanumeric_ratio",
+    "name_similarity",
+    "name_available"
+  ],
+  "scikit_learn_version": "1.8.0",
+  "seed": 43,
+  "split_counts": {
+    "test": 29746,
+    "train": 89239,
+    "validation": 29746
+  },
+  "test": {
+    "abstained": 11,
+    "coverage": 0.999630202380152,
+    "false_flags": 1097,
+    "flagged": 8356,
+    "missed_flags": 2060,
+    "ordinary": 21390,
+    "ordinary_false_flag_rate": 0.05128564749883123,
+    "ordinary_unflagged": 20293,
+    "precision": 0.8516163938861084,
+    "recall": 0.7534705600765916,
+    "scored": 29735,
+    "true_flags": 6296
+  },
+  "training_class_counts": {
+    "flagged": 25068,
+    "ordinary": 64171
+  },
+  "training_names_available": 0,
+  "validation": {
+    "abstained": 7,
+    "coverage": 0.9997646742419148,
+    "false_flags": 1068,
+    "flagged": 8356,
+    "missed_flags": 2056,
+    "ordinary": 21390,
+    "ordinary_false_flag_rate": 0.049929873772791025,
+    "ordinary_unflagged": 20322,
+    "precision": 0.8550488599348535,
+    "recall": 0.7539492580181906,
+    "scored": 29739,
+    "true_flags": 6300
+  },
+  "validation_max_ordinary_false_flag_rate": 0.05
+}
